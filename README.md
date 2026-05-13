@@ -44,6 +44,18 @@ npm start
 
 Then http://localhost:3000 serves the API, websocket, and the built React app.
 
+## macOS desktop app
+
+Bundle as a `.dmg` (signed/notarized for distribution).
+
+```bash
+npm run mac:dev          # run as desktop app for testing
+npm run mac:build        # unsigned .dmg (works on your mac, warns on others)
+npm run mac:build:signed # signed + notarized .dmg (Apple Developer Program required)
+```
+
+See `electron/README.md` for full signing + notarization setup.
+
 ## Companion variable syntax
 
 In any text field:

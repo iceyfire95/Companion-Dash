@@ -4,12 +4,18 @@
   "private": true,
   "description": "Web-based dashboard for Bitfocus Companion variables",
   "scripts": {
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install && cd ../electron && npm install",
     "dev": "concurrently -n server,client -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client && npm run build --prefix server",
-    "start": "node server/dist/index.js"
+    "start": "node server/dist/index.js",
+    "mac:dev": "npm run build && cd electron && npm start",
+    "mac:pack": "npm run build && cd server && npm prune --omit=dev && cd ../electron && npm run pack",
+    "mac:build": "npm run build && cd server && npm prune --omit=dev && cd ../electron && npm run dist",
+    "mac:build:signed": "npm run build && cd server && npm prune --omit=dev && cd ../electron && npm run dist:signed",
+    "mac:rehydrate-server": "cd server && npm install"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "concurrently": "^9.0.1",
+    "electron-builder": "^26.8.1"
   }
 }

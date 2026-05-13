@@ -11,12 +11,6 @@ function renderMarkdown(s: string): string {
   catch { return s; }
 }
 
-function justifyFor(align: Cell['align']): CSSProperties['justifyContent'] {
-  return align === 'left' ? 'flex-start'
-       : align === 'right' ? 'flex-end'
-       : 'center';
-}
-
 function alignItemsFor(valign: Cell['valign']): CSSProperties['alignItems'] {
   return valign === 'top' ? 'flex-start'
        : valign === 'bottom' ? 'flex-end'
@@ -24,12 +18,13 @@ function alignItemsFor(valign: Cell['valign']): CSSProperties['alignItems'] {
 }
 
 function CellView({
-  cell, values, isHeader, fillParent
+  cell, values, isHeader, fillParent, selected
 }: {
   cell: Cell;
   values: Record<string, string>;
   isHeader: boolean;
   fillParent?: boolean;
+  selected?: boolean;
 }) {
   const style = applyRules(cell, values);
   const valign: Cell['valign'] = cell.valign ?? 'middle';
@@ -39,8 +34,10 @@ function CellView({
 
   const { outerRef, innerRef } = useAutoFit(cell.fontSize, [html, cell.fontSize]);
 
-  // Wrapper fills its grid/flex parent. Alignment is done on this wrapper
-  // (flex container). Inner is a block, sized to content, centered by flex.
+  // Wrapper fills its grid/flex parent. It's a flex container that vertically
+  // aligns the inner element. The inner element fills the wrapper's width, so
+  // text-align does the horizontal alignment (this matters when marked wraps
+  // content in a <p>, which is a block element).
   const wrapperStyle: CSSProperties = {
     background: style.bgColor,
     color: style.textColor,
@@ -49,14 +46,18 @@ function CellView({
     borderStyle: cell.borderWidth > 0 ? 'solid' : 'none',
     fontWeight: style.fontWeight,
     display: 'flex',
-    justifyContent: justifyFor(cell.align),
-    alignItems: alignItemsFor(valign),
+    flexDirection: 'column',
+    justifyContent: alignItemsFor(valign), // vertical via main-axis
+    alignItems: 'stretch',                 // inner fills horizontally
     padding: 4,
     width: '100%',
     height: '100%',
     overflow: 'hidden',
     minWidth: 0,
     minHeight: 0,
+    position: 'relative',
+    // Selection visual - inset outline that doesn't change layout
+    ...(selected ? { outline: '2px solid #f59e0b', outlineOffset: '-2px' } : {}),
     ...(fillParent ? { flex: 1, alignSelf: 'stretch' } : {}),
     gridRow: isHeader ? undefined : `${cell.row + 1} / span ${cell.rowSpan}`,
     gridColumn: isHeader ? undefined : `${cell.col + 1} / span ${cell.colSpan}`
@@ -65,9 +66,10 @@ function CellView({
   const innerStyle: CSSProperties = {
     textAlign: cell.align,
     fontSize: cell.fontSize,
-    maxWidth: '100%',
-    // Inner is a sized-to-content block. Flex parent positions it.
-    display: 'block'
+    // Inner is full-width so text-align has effect. height:auto so
+    // align-items 'stretch' on parent doesn't stretch this vertically;
+    // we use flex-direction:column + justify-content for vertical positioning.
+    width: '100%'
   };
 
   return (
@@ -87,6 +89,8 @@ export interface PanelViewProps {
   values: Record<string, string>;
   selected?: boolean;
   editing?: boolean;
+  /** Cell id to highlight as selected. Use 'header' for the header cell. */
+  selectedCellId?: string | null;
   /** Height (px) of the header strip when headerEnabled. Defaults to 25% of panel height. */
   headerHeightRatio?: number;
   onMouseDownPanel?: (e: React.MouseEvent) => void;
@@ -94,7 +98,7 @@ export interface PanelViewProps {
 }
 
 export function PanelView({
-  panel, values, selected, editing, headerHeightRatio = 0.25,
+  panel, values, selected, editing, selectedCellId, headerHeightRatio = 0.25,
   onMouseDownPanel, onMouseDownResize
 }: PanelViewProps) {
   const gridTemplate: CSSProperties = {
@@ -131,12 +135,24 @@ export function PanelView({
             minHeight: 0
           }}
         >
-          <CellView cell={panel.header} values={values} isHeader fillParent />
+          <CellView
+            cell={panel.header}
+            values={values}
+            isHeader
+            fillParent
+            selected={selectedCellId === 'header'}
+          />
         </div>
       )}
       <div className="panel-body" style={gridTemplate}>
         {panel.cells.map(c => (
-          <CellView key={c.id} cell={c} values={values} isHeader={false} />
+          <CellView
+            key={c.id}
+            cell={c}
+            values={values}
+            isHeader={false}
+            selected={selectedCellId === c.id}
+          />
         ))}
       </div>
       {onMouseDownResize && (

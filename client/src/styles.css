@@ -214,3 +214,28 @@ input[type="checkbox"] {
 }
 .status-dot.on { background: #22c55e; }
 .status-dot.off { background: #ef4444; }
+
+.conn-indicator {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.conn-indicator.on { border-color: #166534; background: #0c1f12; }
+.conn-indicator.err { border-color: #7f1d1d; background: #1f0c0c; }
+.conn-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #555;
+  margin-top: 4px;
+  flex: 0 0 auto;
+}
+.conn-dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+.conn-dot.off { background: #888; }
+.conn-dot.err { background: #ef4444; box-shadow: 0 0 6px #ef444488; }

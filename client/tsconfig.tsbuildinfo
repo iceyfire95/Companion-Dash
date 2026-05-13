@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/types.ts","./src/components/inspector.tsx","./src/components/panelview.tsx","./src/lib/api.ts","./src/lib/useautofit.ts","./src/lib/usevariablevalues.ts","./src/lib/variables.ts","./src/pages/editorpage.tsx","./src/pages/homepage.tsx","./src/pages/settingspage.tsx","./src/pages/variablespage.tsx","./src/pages/viewerpage.tsx"],"version":"5.9.3"}

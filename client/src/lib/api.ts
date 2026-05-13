@@ -43,5 +43,21 @@ export const api = {
   getCompanion: () => j<CompanionConfig>('/api/settings/companion'),
   setCompanion: (cfg: CompanionConfig) =>
     j<CompanionConfig>('/api/settings/companion', { method: 'PUT', body: JSON.stringify(cfg) }),
-  getValues: () => j<Record<string, string>>('/api/settings/values')
+  getValues: () => j<Record<string, string>>('/api/settings/values'),
+  getStatus: () => j<PollerStatus>('/api/settings/status')
 };
+
+export interface PollerStatus {
+  enabled: boolean;
+  connected: boolean;
+  host: string;
+  port: number;
+  pollIntervalMs: number;
+  wantedCount: number;
+  knownCount: number;
+  lastPollAt: number | null;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+  successInLastPoll: number;
+  failInLastPoll: number;
+}

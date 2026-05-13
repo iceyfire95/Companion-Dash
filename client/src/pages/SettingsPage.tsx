@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, type PollerStatus } from '../lib/api';
 import type { CompanionConfig } from '../types';
 
 export function SettingsPage() {
   const [cfg, setCfg] = useState<CompanionConfig | null>(null);
+  const [status, setStatus] = useState<PollerStatus | null>(null);
   const [savedMsg, setSavedMsg] = useState('');
 
   useEffect(() => { api.getCompanion().then(setCfg); }, []);
+
+  // Poll status every 1s so the indicator stays live.
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try { const s = await api.getStatus(); if (alive) setStatus(s); }
+      catch { /* ignore transient errors */ }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   if (!cfg) return <div style={{ padding: 20 }}>Loading...</div>;
 
@@ -34,7 +47,10 @@ export function SettingsPage() {
           The server polls Companion's HTTP API for variable values.
           Make sure Companion's HTTP API is enabled and reachable.
         </p>
-        <div className="inspector" style={{ width: '100%', border: '1px solid #2a2a2a', borderRadius: 6 }}>
+
+        <ConnectionIndicator status={status} />
+
+        <div className="inspector" style={{ width: '100%', border: '1px solid #2a2a2a', borderRadius: 6, marginTop: 12 }}>
           <section>
             <div className="row">
               <label>Enabled</label>
@@ -91,6 +107,54 @@ export function SettingsPage() {
           from the connection labelled <code>atem</code>.
         </p>
       </div>
+    </div>
+  );
+}
+
+function ConnectionIndicator({ status }: { status: PollerStatus | null }) {
+  if (!status) {
+    return (
+      <div className="conn-indicator">
+        <span className="conn-dot off" /> <span>Loading status...</span>
+      </div>
+    );
+  }
+  if (!status.enabled) {
+    return (
+      <div className="conn-indicator">
+        <span className="conn-dot off" /> <span>Polling is OFF — toggle Enabled below to start.</span>
+      </div>
+    );
+  }
+  if (status.connected) {
+    return (
+      <div className="conn-indicator on">
+        <span className="conn-dot on" />
+        <span>
+          <strong>Connected</strong> to {status.host}:{status.port}
+          {status.wantedCount > 0
+            ? ` — receiving ${status.knownCount}/${status.wantedCount} variables`
+            : ' — no variables referenced yet'}
+          {status.failInLastPoll > 0 && status.successInLastPoll > 0 && (
+            <span style={{ color: '#f59e0b', marginLeft: 8 }}>
+              ({status.failInLastPoll} failing)
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="conn-indicator err">
+      <span className="conn-dot err" />
+      <span>
+        <strong>Not connected</strong> to {status.host}:{status.port}
+        {status.lastError && (
+          <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>
+            {status.lastError}
+          </div>
+        )}
+      </span>
     </div>
   );
 }

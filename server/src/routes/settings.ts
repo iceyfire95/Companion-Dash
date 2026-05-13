@@ -28,4 +28,8 @@ r.get('/values', (_req, res) => {
   res.json(poller.getAll());
 });
 
+r.get('/status', (_req, res) => {
+  res.json(poller.getStatus());
+});
+
 export default r;

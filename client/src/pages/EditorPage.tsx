@@ -198,6 +198,7 @@ export function EditorPage() {
                 panel={p}
                 values={values}
                 editing={selectedPanelId === p.id}
+                selectedCellId={selectedPanelId === p.id ? selectedCellId : null}
                 onMouseDownPanel={e => onPanelMouseDown(e, p)}
                 onMouseDownResize={(e, kind) => startDrag(e, p, kind)}
               />

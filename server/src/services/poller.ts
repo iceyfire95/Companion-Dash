@@ -26,9 +26,49 @@ export class CompanionPoller extends EventEmitter {
   private timer: NodeJS.Timeout | null = null;
   private inFlight = false;
 
+  // Status tracking
+  private lastPollAt: number | null = null;
+  private lastSuccessAt: number | null = null;
+  private lastError: string | null = null;
+  private successInLastPoll = 0;
+  private failInLastPoll = 0;
+
   constructor() {
     super();
     this.cfg = getCompanionConfig();
+  }
+
+  /** Snapshot of current poller status, used by the /status endpoint. */
+  getStatus() {
+    const wantedCount = this.wanted.size;
+    const knownCount = this.values.size;
+    const enabled = this.cfg.enabled;
+    // "connected" means: enabled, AND last poll either had no work or had
+    // at least one successful fetch in the most recent cycle. If everything
+    // failed in the last cycle we treat as not connected.
+    let connected = false;
+    if (enabled) {
+      if (wantedCount === 0) {
+        // Nothing to poll — treat as connected if we never errored, else not.
+        connected = this.lastError === null;
+      } else {
+        connected = this.successInLastPoll > 0;
+      }
+    }
+    return {
+      enabled,
+      connected,
+      host: this.cfg.host,
+      port: this.cfg.port,
+      pollIntervalMs: this.cfg.pollIntervalMs,
+      wantedCount,
+      knownCount,
+      lastPollAt: this.lastPollAt,
+      lastSuccessAt: this.lastSuccessAt,
+      lastError: this.lastError,
+      successInLastPoll: this.successInLastPoll,
+      failInLastPoll: this.failInLastPoll
+    };
   }
 
   setConfig(cfg: CompanionConfig): void {
@@ -79,13 +119,40 @@ export class CompanionPoller extends EventEmitter {
   }
 
   private async pollOnce(): Promise<void> {
-    if (this.wanted.size === 0) return;
+    this.lastPollAt = Date.now();
+    this.successInLastPoll = 0;
+    this.failInLastPoll = 0;
+    if (this.wanted.size === 0) {
+      // No variables to poll. Do a single dummy probe to keep status fresh.
+      try {
+        const probeUrl = `http://${this.cfg.host}:${this.cfg.port}/api/version`;
+        const { statusCode, body } = await request(probeUrl, {
+          method: 'GET', headersTimeout: 2000, bodyTimeout: 2000
+        });
+        await body.dump();
+        if (statusCode === 200 || statusCode === 404) {
+          // Either endpoint exists (200) or Companion is up but the path
+          // didn't match (404). Both = host reachable = "connected".
+          this.lastError = null;
+          this.lastSuccessAt = Date.now();
+        } else {
+          this.lastError = `probe returned ${statusCode}`;
+        }
+      } catch (e) {
+        this.lastError = (e as Error)?.message || 'probe failed';
+      }
+      return;
+    }
     // Parallelise but cap concurrency so we don't blast Companion
     const ids = [...this.wanted];
     const CONCURRENCY = 16;
     for (let i = 0; i < ids.length; i += CONCURRENCY) {
       const chunk = ids.slice(i, i + CONCURRENCY);
       await Promise.all(chunk.map(id => this.fetchOne(id)));
+    }
+    if (this.successInLastPoll > 0) {
+      this.lastSuccessAt = Date.now();
+      this.lastError = null;
     }
   }
 
@@ -100,16 +167,20 @@ export class CompanionPoller extends EventEmitter {
       });
       if (statusCode !== 200) {
         await body.dump();
+        this.failInLastPoll++;
+        this.lastError = `HTTP ${statusCode} for ${id}`;
         return;
       }
       const text = await body.text();
+      this.successInLastPoll++;
       const prev = this.values.get(id);
       if (prev !== text) {
         this.values.set(id, text);
         this.emit('change', { id, value: text });
       }
-    } catch {
-      // network error - skip silently; UI shows raw placeholder
+    } catch (e) {
+      this.failInLastPoll++;
+      this.lastError = (e as Error)?.message || 'request failed';
     }
   }
 

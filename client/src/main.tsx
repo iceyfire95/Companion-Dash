@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage';
 import { EditorPage } from './pages/EditorPage';
 import { ViewerPage } from './pages/ViewerPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { VariablesPage } from './pages/VariablesPage';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/variables" element={<VariablesPage />} />
         <Route path="/edit/:dashboardId" element={<EditorPage />} />
         <Route path="/view/:dashboardId" element={<ViewerPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
