@@ -9,6 +9,7 @@ data.db-wal
 data.db-shm
 
 # Electron build artifacts
-electron/out/
 electron/build/icon.iconset/
 electron/build/icon.png
+electron/out/
+**/.DS_Store
