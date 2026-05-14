@@ -23,6 +23,7 @@ Deferred (v2+): expression operators, custom fonts, video/iframe boxes, multi-pa
 
 /electron/out
 All unsigned packages
+Only tested on Apple Silicon so far, other releases currently not tested
 
 ## Quick start (macOS)
 
