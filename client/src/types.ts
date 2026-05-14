@@ -13,6 +13,20 @@ export interface ConditionalRule {
   fontWeight?: number;
 }
 
+export interface ButtonAction {
+  id: string;
+  page: number;
+  row: number;
+  column: number;
+}
+
+export interface ButtonConfig {
+  enabled: boolean;
+  mode: 'press' | 'toggle';
+  press: ButtonAction | null;
+  toggleSteps: ButtonAction[];
+}
+
 export interface Cell {
   id: string;
   row: number;
@@ -29,6 +43,7 @@ export interface Cell {
   borderColor: string;
   borderWidth: number;
   rules: ConditionalRule[];
+  button?: ButtonConfig;
 }
 
 export interface Panel {
@@ -49,6 +64,7 @@ export interface Panel {
   gap: number;
   templateId: string | null;
   name: string;
+  button?: ButtonConfig;
 }
 
 export interface Dashboard {

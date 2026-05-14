@@ -1,5 +1,5 @@
 import type {
-  Dashboard, Panel, SavedPanelTemplate, CompanionConfig
+  Dashboard, Panel, SavedPanelTemplate, CompanionConfig, ButtonAction
 } from '../types';
 
 async function j<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -44,7 +44,24 @@ export const api = {
   setCompanion: (cfg: CompanionConfig) =>
     j<CompanionConfig>('/api/settings/companion', { method: 'PUT', body: JSON.stringify(cfg) }),
   getValues: () => j<Record<string, string>>('/api/settings/values'),
-  getStatus: () => j<PollerStatus>('/api/settings/status')
+  getStatus: () => j<PollerStatus>('/api/settings/status'),
+
+  // Buttons
+  triggerButton: (panelId: string, cellId: string | null) =>
+    j<{ ok: boolean; error?: string; firedAction?: ButtonAction; nextStep?: number }>(
+      '/api/buttons/trigger',
+      { method: 'POST', body: JSON.stringify({ panelId, cellId }) }
+    ),
+  testButton: (action: ButtonAction) =>
+    j<{ ok: boolean; error?: string }>(
+      '/api/buttons/test',
+      { method: 'POST', body: JSON.stringify({ action }) }
+    ),
+  resetToggle: (panelId: string, cellId: string | null | undefined) =>
+    j<{ ok: boolean }>('/api/buttons/reset', {
+      method: 'POST',
+      body: JSON.stringify({ panelId, cellId })
+    })
 };
 
 export interface PollerStatus {

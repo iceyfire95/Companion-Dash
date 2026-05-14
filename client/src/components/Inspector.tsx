@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Panel, Cell, ConditionalRule, RuleOp } from '../types';
+import type { Panel, Cell, ConditionalRule, RuleOp, ButtonConfig, ButtonAction } from '../types';
+import { api } from '../lib/api';
 
 const RULE_OPS: { value: RuleOp; label: string }[] = [
   { value: 'eq', label: '= equals' },
@@ -303,8 +304,24 @@ export function Inspector({
           >
             + Add rule
           </button>
+
+          <ButtonEditor
+            label="Cell button"
+            cfg={cell.button}
+            onChange={(b) => updateCell({ button: b })}
+          />
         </section>
       )}
+
+      <section>
+        <h3>Panel button</h3>
+        <ButtonEditor
+          label="Panel button"
+          cfg={panel.button}
+          onChange={(b) => onPanelChange({ ...panel, button: b })}
+          embedded
+        />
+      </section>
 
       <section>
         <h3>Panel actions</h3>
@@ -393,3 +410,169 @@ function defaultHeaderCell(): Cell {
   c.bgColor = '#222222';
   return c;
 }
+
+// ---------- Button editor --------------------------------------------------
+
+function newButtonAction(): ButtonAction {
+  return {
+    id: Math.random().toString(36).slice(2, 10),
+    page: 1, row: 0, column: 0
+  };
+}
+
+function defaultButtonConfig(): ButtonConfig {
+  return { enabled: false, mode: 'press', press: null, toggleSteps: [] };
+}
+
+function ButtonEditor({
+  label, cfg, onChange, embedded
+}: {
+  label: string;
+  cfg: ButtonConfig | undefined;
+  onChange: (b: ButtonConfig | undefined) => void;
+  embedded?: boolean;
+}) {
+  const current = cfg ?? defaultButtonConfig();
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const update = (patch: Partial<ButtonConfig>) => onChange({ ...current, ...patch });
+
+  async function fireTest(a: ButtonAction) {
+    setTestMsg(null);
+    try {
+      const r = await api.testButton(a);
+      setTestMsg({ ok: r.ok, text: r.ok ? `Fired ${a.page}/${a.row}/${a.column}` : (r.error || 'failed') });
+    } catch (e) {
+      setTestMsg({ ok: false, text: String((e as Error).message || e) });
+    }
+    setTimeout(() => setTestMsg(null), 3000);
+  }
+
+  return (
+    <div style={{ marginTop: embedded ? 0 : 12, border: embedded ? 'none' : '1px solid #2a2a2a', borderRadius: 4, padding: embedded ? 0 : 10, background: embedded ? 'transparent' : '#181818' }}>
+      {!embedded && (
+        <h4 style={{ marginTop: 0, marginBottom: 8, fontSize: 12, color: '#888' }}>
+          {label}
+        </h4>
+      )}
+
+      <div className="row">
+        <label>Enabled</label>
+        <button
+          onClick={() => update({ enabled: !current.enabled })}
+          style={{
+            background: current.enabled ? '#22c55e' : '#444',
+            color: '#fff', border: 'none', padding: '4px 12px',
+            borderRadius: 4, cursor: 'pointer', fontWeight: 600, minWidth: 50
+          }}
+        >
+          {current.enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {current.enabled && (
+        <>
+          <div className="row">
+            <label>Mode</label>
+            <select value={current.mode}
+                    onChange={e => update({ mode: e.target.value as 'press' | 'toggle' })}>
+              <option value="press">Press</option>
+              <option value="toggle">Toggle (cycle steps)</option>
+            </select>
+          </div>
+
+          {current.mode === 'press' && (
+            <ActionRow
+              action={current.press ?? newButtonAction()}
+              onChange={a => update({ press: a })}
+              onTest={fireTest}
+            />
+          )}
+
+          {current.mode === 'toggle' && (
+            <>
+              <div style={{ fontSize: 12, color: '#888', margin: '8px 0' }}>
+                Each click fires the next step, then wraps to the first.
+              </div>
+              {current.toggleSteps.map((step, i) => (
+                <div key={step.id} style={{ borderTop: '1px solid #2a2a2a', paddingTop: 8, marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Step {i + 1}</div>
+                  <ActionRow
+                    action={step}
+                    onChange={a => {
+                      const next = [...current.toggleSteps];
+                      next[i] = a;
+                      update({ toggleSteps: next });
+                    }}
+                    onTest={fireTest}
+                    onRemove={() => {
+                      const next = current.toggleSteps.filter(s => s.id !== step.id);
+                      update({ toggleSteps: next });
+                    }}
+                    onMove={dir => {
+                      const next = [...current.toggleSteps];
+                      const swap = i + dir;
+                      if (swap < 0 || swap >= next.length) return;
+                      [next[i], next[swap]] = [next[swap], next[i]];
+                      update({ toggleSteps: next });
+                    }}
+                  />
+                </div>
+              ))}
+              <button
+                style={{ marginTop: 8 }}
+                onClick={() => update({ toggleSteps: [...current.toggleSteps, newButtonAction()] })}
+              >
+                + Add step
+              </button>
+            </>
+          )}
+
+          {testMsg && (
+            <div style={{
+              marginTop: 8, fontSize: 12,
+              color: testMsg.ok ? '#22c55e' : '#ef4444'
+            }}>
+              {testMsg.text}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActionRow({
+  action, onChange, onTest, onRemove, onMove
+}: {
+  action: ButtonAction;
+  onChange: (a: ButtonAction) => void;
+  onTest: (a: ButtonAction) => void;
+  onRemove?: () => void;
+  onMove?: (dir: -1 | 1) => void;
+}) {
+  return (
+    <>
+      <div className="row">
+        <label>Page</label>
+        <input type="number" min={1} value={action.page}
+               onChange={e => onChange({ ...action, page: Math.max(1, Number(e.target.value)) })} />
+      </div>
+      <div className="row">
+        <label>Row / Col</label>
+        <input type="number" min={0} value={action.row}
+               onChange={e => onChange({ ...action, row: Math.max(0, Number(e.target.value)) })} />
+        <input type="number" min={0} value={action.column}
+               onChange={e => onChange({ ...action, column: Math.max(0, Number(e.target.value)) })} />
+      </div>
+      <div className="row" style={{ marginTop: 6 }}>
+        <button onClick={() => onTest(action)}>Test</button>
+        {onMove && <button onClick={() => onMove(-1)}>↑</button>}
+        {onMove && <button onClick={() => onMove(1)}>↓</button>}
+        <div style={{ flex: 1 }} />
+        {onRemove && <button className="danger" onClick={onRemove}>Remove</button>}
+      </div>
+    </>
+  );
+}
+

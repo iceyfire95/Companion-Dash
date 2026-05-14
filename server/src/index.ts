@@ -10,6 +10,7 @@ import dashboardsRouter from './routes/dashboards.js';
 import panelsRouter from './routes/panels.js';
 import savedPanelsRouter from './routes/savedPanels.js';
 import settingsRouter from './routes/settings.js';
+import buttonsRouter from './routes/buttons.js';
 import { poller } from './services/poller.js';
 import { rebuildWantedVariables } from './services/orchestrator.js';
 
@@ -28,6 +29,7 @@ app.use('/api/dashboards', dashboardsRouter);
 app.use('/api/panels', panelsRouter);
 app.use('/api/saved-panels', savedPanelsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/buttons', buttonsRouter);
 
 // Serve built client when present (production single-port)
 const clientDist = join(__dirname, '..', '..', 'client', 'dist');

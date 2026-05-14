@@ -3,6 +3,7 @@ import * as db from '../db/index.js';
 import { newId } from '../types.js';
 import type { Panel, Cell } from '../types.js';
 import { rebuildWantedVariables } from '../services/orchestrator.js';
+import { clearToggleState } from '../services/buttons.js';
 
 const r = Router();
 
@@ -106,6 +107,7 @@ r.put('/:id', (req, res) => {
 r.delete('/:id', (req, res) => {
   const p = db.getPanel(req.params.id);
   db.deletePanel(req.params.id);
+  clearToggleState(req.params.id);
   if (p) {
     const dash = db.getDashboard(p.dashboardId);
     if (dash) db.updateDashboard({ ...dash, updatedAt: Date.now() });

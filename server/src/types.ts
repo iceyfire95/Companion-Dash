@@ -2,6 +2,30 @@ import { nanoid } from 'nanoid';
 
 export const newId = (): string => nanoid(12);
 
+/** Address of a Companion button. Page is 1-based; row/column 0-based. */
+export interface ButtonAction {
+  id: string;
+  page: number;
+  row: number;
+  column: number;
+}
+
+export interface ButtonConfig {
+  enabled: boolean;
+  mode: 'press' | 'toggle';
+  /** Used when mode === 'press'. */
+  press: ButtonAction | null;
+  /**
+   * Used when mode === 'toggle'. Each click fires the next action in the list
+   * (cycles back to start). Empty list = no-op.
+   */
+  toggleSteps: ButtonAction[];
+}
+
+export function defaultButtonConfig(): ButtonConfig {
+  return { enabled: false, mode: 'press', press: null, toggleSteps: [] };
+}
+
 // Cell = one text field. Header is a cell too (full-width, separate flag).
 export interface Cell {
   id: string;
@@ -21,6 +45,8 @@ export interface Cell {
   borderWidth: number;
   // Conditional rules
   rules: ConditionalRule[];
+  // Optional Companion button binding
+  button?: ButtonConfig;
 }
 
 export type RuleOp =
@@ -64,6 +90,9 @@ export interface Panel {
   // Template link
   templateId: string | null;  // if instantiated from template
   name: string;               // user label
+  // Optional panel-level Companion button binding (click anywhere in panel
+  // that isn't a button cell triggers this)
+  button?: ButtonConfig;
 }
 
 export interface Dashboard {

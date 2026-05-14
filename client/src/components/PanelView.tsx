@@ -18,13 +18,15 @@ function alignItemsFor(valign: Cell['valign']): CSSProperties['alignItems'] {
 }
 
 function CellView({
-  cell, values, isHeader, fillParent, selected
+  cell, values, isHeader, fillParent, selected, isButton, onClick
 }: {
   cell: Cell;
   values: Record<string, string>;
   isHeader: boolean;
   fillParent?: boolean;
   selected?: boolean;
+  isButton?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
   const style = applyRules(cell, values);
   const valign: Cell['valign'] = cell.valign ?? 'middle';
@@ -58,6 +60,8 @@ function CellView({
     position: 'relative',
     // Selection visual - inset outline that doesn't change layout
     ...(selected ? { outline: '2px solid #f59e0b', outlineOffset: '-2px' } : {}),
+    // Button cursor + active feedback
+    ...(isButton ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
     ...(fillParent ? { flex: 1, alignSelf: 'stretch' } : {}),
     gridRow: isHeader ? undefined : `${cell.row + 1} / span ${cell.rowSpan}`,
     gridColumn: isHeader ? undefined : `${cell.col + 1} / span ${cell.colSpan}`
@@ -73,7 +77,12 @@ function CellView({
   };
 
   return (
-    <div ref={outerRef} className="cell" style={wrapperStyle}>
+    <div
+      ref={outerRef}
+      className={`cell${isButton ? ' cell-button' : ''}`}
+      style={wrapperStyle}
+      onClick={onClick}
+    >
       <div
         ref={innerRef}
         className="cell-inner"
@@ -95,11 +104,21 @@ export interface PanelViewProps {
   headerHeightRatio?: number;
   onMouseDownPanel?: (e: React.MouseEvent) => void;
   onMouseDownResize?: (e: React.MouseEvent, kind: 'br' | 'r' | 'b') => void;
+  /**
+   * Viewer-only: invoked when a clickable cell (with button.enabled) is
+   * pressed. cellId is either a real cell id or 'header'.
+   */
+  onCellButtonPress?: (cellId: string) => void;
+  /**
+   * Viewer-only: invoked when the panel itself (with panel.button.enabled)
+   * is pressed in an area not handled by a cell button.
+   */
+  onPanelButtonPress?: () => void;
 }
 
 export function PanelView({
   panel, values, selected, editing, selectedCellId, headerHeightRatio = 0.25,
-  onMouseDownPanel, onMouseDownResize
+  onMouseDownPanel, onMouseDownResize, onCellButtonPress, onPanelButtonPress
 }: PanelViewProps) {
   const gridTemplate: CSSProperties = {
     gridTemplateRows: `repeat(${panel.rows}, 1fr)`,
@@ -112,6 +131,14 @@ export function PanelView({
   return (
     <div
       className={`panel-box ${editing ? 'editing' : ''} ${selected ? 'selected' : ''}`}
+      onMouseDown={onMouseDownPanel}
+      onClick={onPanelButtonPress && panel.button?.enabled
+        ? (e) => {
+            // Only fire if click wasn't already consumed by a cell button.
+            if ((e.target as HTMLElement).closest('.cell-button')) return;
+            onPanelButtonPress();
+          }
+        : undefined}
       style={{
         left: panel.x,
         top: panel.y,
@@ -120,9 +147,9 @@ export function PanelView({
         zIndex: panel.zIndex,
         background: panel.bgColor,
         border: `${panel.borderWidth}px solid ${panel.borderColor}`,
-        borderRadius: panel.borderRadius
+        borderRadius: panel.borderRadius,
+        ...(onPanelButtonPress && panel.button?.enabled ? { cursor: 'pointer' } : {})
       }}
-      onMouseDown={onMouseDownPanel}
     >
       {panel.headerEnabled && panel.header && (
         <div
@@ -141,6 +168,10 @@ export function PanelView({
             isHeader
             fillParent
             selected={selectedCellId === 'header'}
+            isButton={!!(onCellButtonPress && panel.header.button?.enabled)}
+            onClick={onCellButtonPress && panel.header.button?.enabled
+              ? (e) => { e.stopPropagation(); onCellButtonPress('header'); }
+              : undefined}
           />
         </div>
       )}
@@ -152,6 +183,10 @@ export function PanelView({
             values={values}
             isHeader={false}
             selected={selectedCellId === c.id}
+            isButton={!!(onCellButtonPress && c.button?.enabled)}
+            onClick={onCellButtonPress && c.button?.enabled
+              ? (e) => { e.stopPropagation(); onCellButtonPress(c.id); }
+              : undefined}
           />
         ))}
       </div>

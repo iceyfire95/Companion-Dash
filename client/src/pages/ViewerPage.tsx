@@ -57,7 +57,17 @@ export function ViewerPage() {
         }}
       >
         {panels.map(p => (
-          <PanelView key={p.id} panel={p} values={values} />
+          <PanelView
+            key={p.id}
+            panel={p}
+            values={values}
+            onCellButtonPress={(cellId) => {
+              void api.triggerButton(p.id, cellId).catch(e => console.error('button trigger failed', e));
+            }}
+            onPanelButtonPress={() => {
+              void api.triggerButton(p.id, null).catch(e => console.error('button trigger failed', e));
+            }}
+          />
         ))}
       </div>
     </div>

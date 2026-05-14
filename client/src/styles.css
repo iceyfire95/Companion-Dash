@@ -112,6 +112,13 @@ input[type="checkbox"] {
   min-width: 0;
   min-height: 0;
 }
+.cell-button:active {
+  transform: scale(0.97);
+  filter: brightness(1.2);
+}
+.cell-button {
+  transition: transform 60ms ease, filter 60ms ease;
+}
 .cell-inner {
   white-space: pre-wrap;
   line-height: 1.2;
