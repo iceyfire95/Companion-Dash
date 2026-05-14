@@ -11,8 +11,10 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --mac --dir",
-    "dist": "electron-builder --mac",
-    "dist:signed": "electron-builder --mac -c.mac.notarize.teamId=$APPLE_TEAM_ID"
+    "dist:mac": "electron-builder --mac",
+    "dist:mac:signed": "electron-builder --mac -c.mac.notarize.teamId=$APPLE_TEAM_ID",
+    "dist:win": "electron-builder --win",
+    "dist:all": "electron-builder --mac --win"
   },
   "devDependencies": {
     "electron": "^37.0.0",
@@ -29,6 +31,8 @@
       "main.cjs",
       "preload.cjs",
       "build/icon.icns",
+      "build/icon.ico",
+      "build/icon.png",
       "build/trayTemplate.png",
       "build/trayTemplate@2x.png",
       "!node_modules/.cache/**"
@@ -54,7 +58,7 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "icon": "build/icon.icns",
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "dmg",
@@ -77,6 +81,21 @@
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
       ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }

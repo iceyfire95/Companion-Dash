@@ -35,6 +35,32 @@ npm run dev
 
 Open http://localhost:5173, go to Settings, enable the Companion poller, and set host/port (defaults to `127.0.0.1:8000`).
 
+## Production single-port build
+
+```bash
+npm run build
+npm start
+```
+
+Then http://localhost:3000 serves the API, websocket, and the built React app.
+
+## Desktop app builds
+
+Bundle as native installers using electron-builder.
+
+```bash
+npm run mac:dev          # run as desktop app for testing
+npm run mac:build        # unsigned macOS .dmg + .zip (arm64 + x64)
+npm run win:build        # unsigned Windows portable .exe + .zip (cross-built from Mac)
+npm run release:all      # both mac + win in one go
+npm run mac:build:signed # signed + notarized .dmg (Apple Developer Program required)
+```
+
+Output: `electron/out/`. See `electron/README.md` for full signing setup and
+testing-instructions you can paste to alpha testers.
+
+## Companion variable syntax
+
 In any text field:
 
 - `$(custom:cue)` — reads custom variable `cue`
@@ -50,3 +76,14 @@ The server only polls variables that are actually referenced by any panel.
 ## Data storage
 
 SQLite at `~/.companion-web-dashboard/data.db`. Override with env var `CWD_DB_PATH`.
+
+## Tables
+
+- `dashboards` — canvas size, name, bg
+- `panels` — JSON blob per panel (fast iteration, no migrations for shape changes)
+- `saved_panels` — reusable panel templates
+- `settings` — companion config etc
+
+## Docker (later)
+
+The server is a plain Node app; bind-mount a volume at `/data` and set `CWD_DB_PATH=/data/data.db` for persistence.
