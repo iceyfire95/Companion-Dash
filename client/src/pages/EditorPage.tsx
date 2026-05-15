@@ -202,7 +202,6 @@ export function EditorPage() {
                 selectedCellId={selectedPanelId === p.id ? selectedCellId : null}
                 focusActive={
                   !!(p.focusRule?.enabled &&
-                     p.focusRule.variable &&
                      evaluateRule(p.focusRule, values))
                 }
                 onMouseDownPanel={e => onPanelMouseDown(e, p)}

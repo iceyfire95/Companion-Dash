@@ -22,50 +22,27 @@ export interface ButtonConfig {
   toggleSteps: ButtonAction[];
 }
 
-/**
- * Per-panel auto-focus rule. When the variable matches the operator/value,
- * the viewer renders this panel full-canvas. Auto-exits when the condition
- * becomes false. v1: single condition only.
- */
-export interface FocusRule {
-  enabled: boolean;
-  variable: string;        // 'internal:time_hms', etc. (bare, no $())
-  op: RuleOp;
-  value: string;
-}
-
-/**
- * Per-panel auto-focus rule. When the rule evaluates true (against live
- * variable values), the viewer renders this panel fullscreen, covering the
- * canvas. When the rule goes false again, the viewer returns to the normal
- * layout. Same operators as ConditionalRule for consistency.
- */
-export interface FocusRule {
-  enabled: boolean;
-  variable: string;  // 'conn:name'
-  op: RuleOp;
-  value: string;
-}
-
 export function defaultButtonConfig(): ButtonConfig {
   return { enabled: false, mode: 'press', press: null, toggleSteps: [] };
 }
 
 /**
- * Per-panel auto-focus condition. When `enabled` is true, the viewer
- * continuously evaluates the rule. While the rule is true, the panel expands
- * to fill the canvas (above any other panels). When false, the panel returns
- * to its configured position. Reuses RuleOp from ConditionalRule.
+ * Per-panel auto-focus condition. Matches when ALL conditions are true.
+ * Reuses RuleOp from ConditionalRule. Empty conditions array = never matches.
  */
 export interface FocusRule {
   enabled: boolean;
-  variable: string;   // 'connection:varname' or '$(connection:varname)'
-  op: RuleOp;
-  value: string;
+  conditions: Condition[];
+  /** @deprecated kept for read-time back-compat. */
+  variable?: string;
+  /** @deprecated */
+  op?: RuleOp;
+  /** @deprecated */
+  value?: string;
 }
 
 export function defaultFocusRule(): FocusRule {
-  return { enabled: false, variable: '', op: 'lt', value: '' };
+  return { enabled: false, conditions: [] };
 }
 
 // Cell = one text field. Header is a cell too (full-width, separate flag).
@@ -95,16 +72,28 @@ export type RuleOp =
   | 'eq' | 'neq' | 'contains' | 'startsWith' | 'endsWith'
   | 'gt' | 'gte' | 'lt' | 'lte' | 'regex' | 'empty' | 'notEmpty';
 
-export interface ConditionalRule {
+/** A single test against a variable. Multiple are ANDed in a rule. */
+export interface Condition {
   id: string;
   variable: string;            // e.g. "atem:pgm1_input" or "custom:cue"
   op: RuleOp;
   value: string;               // compared against
-  // Style overrides
+}
+
+export interface ConditionalRule {
+  id: string;
+  conditions: Condition[];
+  // Style overrides applied when ALL conditions are true.
   bgColor?: string;
   textColor?: string;
   borderColor?: string;
   fontWeight?: number;
+  /** @deprecated read-time back-compat. */
+  variable?: string;
+  /** @deprecated */
+  op?: RuleOp;
+  /** @deprecated */
+  value?: string;
 }
 
 export interface Panel {

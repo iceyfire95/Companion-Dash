@@ -2,15 +2,32 @@ export type RuleOp =
   | 'eq' | 'neq' | 'contains' | 'startsWith' | 'endsWith'
   | 'gt' | 'gte' | 'lt' | 'lte' | 'regex' | 'empty' | 'notEmpty';
 
-export interface ConditionalRule {
+/** A single test against a variable. Multiple conditions are ANDed together. */
+export interface Condition {
   id: string;
   variable: string;
   op: RuleOp;
   value: string;
+}
+
+/**
+ * Conditional styling rule for a cell. Matches when ALL conditions are true.
+ * The legacy single-condition shape (variable/op/value at the top level) is
+ * still readable; on load we migrate to conditions[].
+ */
+export interface ConditionalRule {
+  id: string;
+  conditions: Condition[];
   bgColor?: string;
   textColor?: string;
   borderColor?: string;
   fontWeight?: number;
+  /** @deprecated kept for read-time back-compat - see migrateRule. */
+  variable?: string;
+  /** @deprecated */
+  op?: RuleOp;
+  /** @deprecated */
+  value?: string;
 }
 
 export interface ButtonAction {
@@ -27,25 +44,19 @@ export interface ButtonConfig {
   toggleSteps: ButtonAction[];
 }
 
+/**
+ * Auto-focus rule for a panel. Matches when ALL conditions are true.
+ * Same back-compat strategy as ConditionalRule.
+ */
 export interface FocusRule {
   enabled: boolean;
-  variable: string;
-  op: RuleOp;
-  value: string;
-}
-
-export interface FocusRule {
-  enabled: boolean;
-  variable: string;
-  op: RuleOp;
-  value: string;
-}
-
-export interface FocusRule {
-  enabled: boolean;
-  variable: string;
-  op: RuleOp;
-  value: string;
+  conditions: Condition[];
+  /** @deprecated */
+  variable?: string;
+  /** @deprecated */
+  op?: RuleOp;
+  /** @deprecated */
+  value?: string;
 }
 
 export interface Cell {

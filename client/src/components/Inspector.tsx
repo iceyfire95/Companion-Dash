@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Panel, Cell, ConditionalRule, RuleOp, ButtonConfig, ButtonAction, FocusRule } from '../types';
+import type { Panel, Cell, ConditionalRule, Condition, RuleOp, ButtonConfig, ButtonAction, FocusRule } from '../types';
 import { api } from '../lib/api';
 import { VarAutocompleteTextarea, VarAutocompleteInput } from '../lib/autocomplete';
 import { evaluateRule } from '../lib/variables';
@@ -19,12 +19,18 @@ const RULE_OPS: { value: RuleOp; label: string }[] = [
   { value: 'notEmpty', label: 'not empty' }
 ];
 
+function makeId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function newCondition(): Condition {
+  return { id: makeId(), variable: '', op: 'eq', value: '' };
+}
+
 function newRule(): ConditionalRule {
   return {
-    id: Math.random().toString(36).slice(2, 10),
-    variable: '',
-    op: 'eq',
-    value: '',
+    id: makeId(),
+    conditions: [newCondition()],
     bgColor: '#ff0000',
     textColor: '#ffffff'
   };
@@ -348,6 +354,80 @@ export function Inspector({
   );
 }
 
+/**
+ * Returns the rule's conditions, migrating the legacy single-condition shape
+ * if needed. Always returns at least one condition (so the UI has something
+ * to render); the empty-list case is handled at write time when the rule is
+ * saved.
+ */
+function getRuleConditions(rule: ConditionalRule | FocusRule): Condition[] {
+  if (Array.isArray(rule.conditions) && rule.conditions.length > 0) {
+    return rule.conditions;
+  }
+  if (rule.variable && rule.op) {
+    return [{ id: 'legacy', variable: rule.variable, op: rule.op, value: rule.value ?? '' }];
+  }
+  return [newCondition()];
+}
+
+function ConditionRow({
+  cond, onChange, onRemove, onMove, canRemove, isFirst
+}: {
+  cond: Condition;
+  onChange: (c: Condition) => void;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+  canRemove: boolean;
+  isFirst: boolean;
+}) {
+  return (
+    <div style={{
+      borderTop: isFirst ? 'none' : '1px dashed #2a2a2a',
+      paddingTop: isFirst ? 0 : 6,
+      marginTop: isFirst ? 0 : 6
+    }}>
+      {!isFirst && (
+        <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+          AND
+        </div>
+      )}
+      <div className="row">
+        <label>If var</label>
+        <VarAutocompleteInput
+          value={cond.variable}
+          onChange={(v) => onChange({ ...cond, variable: v })}
+          placeholder="atem:pgm1_input"
+          wrapBareVar={false}
+        />
+      </div>
+      <div className="row">
+        <label>Operator</label>
+        <select value={cond.op}
+                onChange={e => onChange({ ...cond, op: e.target.value as RuleOp })}>
+          {RULE_OPS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {cond.op !== 'empty' && cond.op !== 'notEmpty' && (
+        <div className="row">
+          <label>Value</label>
+          <input
+            value={cond.value}
+            onChange={e => onChange({ ...cond, value: e.target.value })}
+          />
+        </div>
+      )}
+      {canRemove && (
+        <div className="row" style={{ marginTop: 4 }}>
+          <button onClick={() => onMove(-1)}>↑</button>
+          <button onClick={() => onMove(1)}>↓</button>
+          <div style={{ flex: 1 }} />
+          <button className="danger" onClick={onRemove} style={{ fontSize: 11 }}>Remove condition</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RuleEditor({
   rule, onChange, onDelete, onMove
 }: {
@@ -356,34 +436,43 @@ function RuleEditor({
   onDelete: () => void;
   onMove: (dir: -1 | 1) => void;
 }) {
+  const conds = getRuleConditions(rule);
+
+  const setConds = (next: Condition[]) => {
+    // Strip the deprecated legacy fields on the way out so we don't keep
+    // writing them back into storage.
+    const { variable, op, value, ...rest } = rule;
+    void variable; void op; void value;
+    onChange({ ...rest, conditions: next });
+  };
+
   return (
     <div className="rule">
-      <div className="row">
-        <label>If var</label>
-        <VarAutocompleteInput
-          value={rule.variable}
-          onChange={(v) => onChange({ ...rule, variable: v })}
-          placeholder="atem:pgm1_input_id"
-          wrapBareVar={false}
+      {conds.map((c, i) => (
+        <ConditionRow
+          key={c.id}
+          cond={c}
+          isFirst={i === 0}
+          canRemove={conds.length > 1}
+          onChange={(updated) => {
+            const next = [...conds]; next[i] = updated; setConds(next);
+          }}
+          onRemove={() => setConds(conds.filter(x => x.id !== c.id))}
+          onMove={(dir) => {
+            const next = [...conds];
+            const j = i + dir;
+            if (j < 0 || j >= next.length) return;
+            [next[i], next[j]] = [next[j], next[i]];
+            setConds(next);
+          }}
         />
-      </div>
-      <div className="row">
-        <label>Operator</label>
-        <select value={rule.op}
-                onChange={e => onChange({ ...rule, op: e.target.value as RuleOp })}>
-          {RULE_OPS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-      {rule.op !== 'empty' && rule.op !== 'notEmpty' && (
-        <div className="row">
-          <label>Value</label>
-          <input
-            value={rule.value}
-            onChange={e => onChange({ ...rule, value: e.target.value })}
-          />
-        </div>
-      )}
-      <div className="row">
+      ))}
+      <button
+        style={{ marginTop: 8, fontSize: 11 }}
+        onClick={() => setConds([...conds, newCondition()])}
+      >+ AND condition</button>
+
+      <div className="row" style={{ marginTop: 8 }}>
         <label>BG / Text</label>
         <input type="color" value={rule.bgColor ?? '#000000'}
                onChange={e => onChange({ ...rule, bgColor: e.target.value })} />
@@ -394,7 +483,7 @@ function RuleEditor({
         <button onClick={() => onMove(-1)}>↑</button>
         <button onClick={() => onMove(1)}>↓</button>
         <div style={{ flex: 1 }} />
-        <button className="danger" onClick={onDelete}>Remove</button>
+        <button className="danger" onClick={onDelete}>Remove rule</button>
       </div>
     </div>
   );
@@ -594,7 +683,7 @@ function ActionRow({
 // ---------- Focus mode rule editor ----------------------------------------
 
 function defaultFocusRule(): FocusRule {
-  return { enabled: false, variable: '', op: 'lt', value: '10' };
+  return { enabled: false, conditions: [{ id: 'init', variable: '', op: 'lt', value: '10' }] };
 }
 
 function FocusRuleEditor({
@@ -605,19 +694,23 @@ function FocusRuleEditor({
   onChange: (r: FocusRule | undefined) => void;
 }) {
   const current = rule ?? defaultFocusRule();
-  const isActive =
-    current.enabled &&
-    current.variable !== '' &&
-    evaluateRule(current, values);
+  const conds = getRuleConditions(current);
+  const isActive = current.enabled && evaluateRule(current, values);
 
   const update = (patch: Partial<FocusRule>) => onChange({ ...current, ...patch });
+  const setConds = (next: Condition[]) => {
+    // Strip the deprecated legacy fields when writing back.
+    const { variable, op, value, ...rest } = current;
+    void variable; void op; void value;
+    onChange({ ...rest, conditions: next });
+  };
 
   return (
     <div>
       <p style={{ color: '#aaa', fontSize: 12, marginTop: 0, marginBottom: 8, lineHeight: 1.4 }}>
-        When the condition becomes true, this panel takes over the full canvas
-        in the viewer. It returns to the normal layout when the condition becomes
-        false again.
+        When ALL conditions are true, this panel takes over the full canvas in
+        the viewer. Returns to the normal layout when any condition becomes
+        false.
       </p>
 
       <div className="row">
@@ -636,31 +729,39 @@ function FocusRuleEditor({
 
       {current.enabled && (
         <>
-          <div className="row">
-            <label>If var</label>
-            <VarAutocompleteInput
-              value={current.variable}
-              onChange={(v) => update({ variable: v })}
-              placeholder="internal:time_hms"
-              wrapBareVar={false}
+          {conds.map((c, i) => (
+            <ConditionRow
+              key={c.id}
+              cond={c}
+              isFirst={i === 0}
+              canRemove={conds.length > 1}
+              onChange={(updated) => {
+                const next = [...conds]; next[i] = updated; setConds(next);
+              }}
+              onRemove={() => setConds(conds.filter(x => x.id !== c.id))}
+              onMove={(dir) => {
+                const next = [...conds];
+                const j = i + dir;
+                if (j < 0 || j >= next.length) return;
+                [next[i], next[j]] = [next[j], next[i]];
+                setConds(next);
+              }}
             />
-          </div>
-          <div className="row">
-            <label>Operator</label>
-            <select value={current.op}
-                    onChange={e => update({ op: e.target.value as RuleOp })}>
-              {RULE_OPS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          {current.op !== 'empty' && current.op !== 'notEmpty' && (
-            <div className="row">
-              <label>Value</label>
-              <input
-                value={current.value}
-                onChange={e => update({ value: e.target.value })}
-                placeholder="10"
-              />
-            </div>
+          ))}
+          <button
+            style={{ marginTop: 8, fontSize: 11 }}
+            onClick={() => setConds([...conds, newCondition()])}
+          >+ AND condition</button>
+
+          {/* Format hint, shown when any condition uses a numeric op */}
+          {conds.some(c => ['gt', 'gte', 'lt', 'lte'].includes(c.op)) && (
+            <p style={{ color: '#888', fontSize: 11, lineHeight: 1.4, marginTop: 8, marginBottom: 0 }}>
+              Numeric comparison supports plain numbers (<code>15</code>),
+              <code> mm:ss </code>(<code>1:30</code> = 90),
+              <code> hh:mm:ss </code>(<code>00:01:30</code> = 90),
+              and <code>mm.ss </code>(<code>1.30</code> = 90).
+              An empty / missing variable never matches.
+            </p>
           )}
 
           {/* Live status indicator */}
@@ -673,7 +774,8 @@ function FocusRuleEditor({
             border: `1px solid ${isActive ? '#166534' : '#2a2a2a'}`,
             display: 'flex',
             alignItems: 'center',
-            gap: 8
+            gap: 8,
+            flexWrap: 'wrap'
           }}>
             <span style={{
               display: 'inline-block',
@@ -683,12 +785,37 @@ function FocusRuleEditor({
             }} />
             <span style={{ color: isActive ? '#86efac' : '#888' }}>
               {isActive
-                ? 'Condition is currently true - panel would be focused in viewer'
-                : current.variable
-                  ? 'Condition is currently false'
-                  : 'No variable set'}
+                ? 'All conditions true - panel would be focused in viewer'
+                : conds.some(c => c.variable)
+                  ? 'Not all conditions true'
+                  : 'No variables set'}
             </span>
           </div>
+
+          {/* Per-condition live preview - useful when ANDing multiple */}
+          {conds.length > 1 && (
+            <div style={{ marginTop: 8, fontSize: 11, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+              {conds.map((c, i) => {
+                if (!c.variable) return null;
+                const v = values[c.variable.replace(/^\$\(([^)]+)\)$/, '$1')] ?? '';
+                const passes = evaluateRule(
+                  { enabled: true, conditions: [c] } as FocusRule,
+                  values
+                );
+                return (
+                  <div key={c.id} style={{ color: passes ? '#86efac' : '#aaa', display: 'flex', gap: 6 }}>
+                    <span style={{ color: passes ? '#22c55e' : '#666' }}>{passes ? '✓' : '✗'}</span>
+                    <span style={{ color: '#7dd3fc' }}>{c.variable}</span>
+                    <span style={{ color: '#666' }}>{c.op}</span>
+                    <span style={{ color: '#aaa' }}>{c.value}</span>
+                    <span style={{ marginLeft: 'auto', color: '#666' }}>
+                      = {v === '' ? '(empty)' : v}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </div>

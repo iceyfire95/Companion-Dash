@@ -31,7 +31,6 @@ export function ViewerPage() {
   const focusedPanel = useMemo(() => {
     const matching = panels.filter(p =>
       p.focusRule?.enabled &&
-      p.focusRule.variable &&
       evaluateRule(p.focusRule, values)
     );
     if (matching.length === 0) return null;
