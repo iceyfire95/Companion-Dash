@@ -1,4 +1,4 @@
-import type { Cell, ConditionalRule } from '../types';
+import type { Cell, RuleOp } from '../types';
 
 const VAR_RE = /\$\(([^)]+)\)/g;
 
@@ -12,7 +12,15 @@ function normalizeVarId(s: string): string {
   return (m ? m[1] : s).trim();
 }
 
-export function evaluateRule(rule: ConditionalRule, values: Record<string, string>): boolean {
+/**
+ * Evaluate a rule-shaped object against current variable values. Accepts
+ * anything with { variable, op, value } so it works for ConditionalRule and
+ * FocusRule.
+ */
+export function evaluateRule(
+  rule: { variable: string; op: RuleOp; value: string },
+  values: Record<string, string>
+): boolean {
   const raw = values[normalizeVarId(rule.variable)] ?? '';
   const target = rule.value;
   switch (rule.op) {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import type { Panel, Cell, ConditionalRule, RuleOp, ButtonConfig, ButtonAction } from '../types';
+import type { Panel, Cell, ConditionalRule, RuleOp, ButtonConfig, ButtonAction, FocusRule } from '../types';
 import { api } from '../lib/api';
+import { VarAutocompleteTextarea, VarAutocompleteInput } from '../lib/autocomplete';
+import { evaluateRule } from '../lib/variables';
 
 const RULE_OPS: { value: RuleOp; label: string }[] = [
   { value: 'eq', label: '= equals' },
@@ -35,10 +37,13 @@ interface Props {
   onSelectCell: (id: string | null) => void;
   onDelete: () => void;
   onSaveTemplate: () => void;
+  /** Current variable values - used to live-preview the focus rule. */
+  values: Record<string, string>;
 }
 
 export function Inspector({
-  panel, selectedCellId, onPanelChange, onSelectCell, onDelete, onSaveTemplate
+  panel, selectedCellId, onPanelChange, onSelectCell, onDelete, onSaveTemplate,
+  values
 }: Props) {
   const updatePanel = (patch: Partial<Panel>) => onPanelChange({ ...panel, ...patch });
 
@@ -212,9 +217,9 @@ export function Inspector({
           </h3>
           <div className="row">
             <label>Text</label>
-            <textarea
+            <VarAutocompleteTextarea
               value={cell.text}
-              onChange={e => updateCell({ text: e.target.value })}
+              onChange={(v) => updateCell({ text: v })}
               placeholder="Plain text, $(custom:var), markdown or HTML"
             />
           </div>
@@ -324,6 +329,15 @@ export function Inspector({
       </section>
 
       <section>
+        <h3>Focus mode</h3>
+        <FocusRuleEditor
+          rule={panel.focusRule}
+          values={values}
+          onChange={(fr) => onPanelChange({ ...panel, focusRule: fr })}
+        />
+      </section>
+
+      <section>
         <h3>Panel actions</h3>
         <button onClick={onSaveTemplate}>Save as template</button>
         <button className="danger" onClick={onDelete} style={{ marginLeft: 6 }}>
@@ -346,10 +360,11 @@ function RuleEditor({
     <div className="rule">
       <div className="row">
         <label>If var</label>
-        <input
+        <VarAutocompleteInput
           value={rule.variable}
-          onChange={e => onChange({ ...rule, variable: e.target.value })}
+          onChange={(v) => onChange({ ...rule, variable: v })}
           placeholder="atem:pgm1_input_id"
+          wrapBareVar={false}
         />
       </div>
       <div className="row">
@@ -576,3 +591,106 @@ function ActionRow({
   );
 }
 
+// ---------- Focus mode rule editor ----------------------------------------
+
+function defaultFocusRule(): FocusRule {
+  return { enabled: false, variable: '', op: 'lt', value: '10' };
+}
+
+function FocusRuleEditor({
+  rule, values, onChange
+}: {
+  rule: FocusRule | undefined;
+  values: Record<string, string>;
+  onChange: (r: FocusRule | undefined) => void;
+}) {
+  const current = rule ?? defaultFocusRule();
+  const isActive =
+    current.enabled &&
+    current.variable !== '' &&
+    evaluateRule(current, values);
+
+  const update = (patch: Partial<FocusRule>) => onChange({ ...current, ...patch });
+
+  return (
+    <div>
+      <p style={{ color: '#aaa', fontSize: 12, marginTop: 0, marginBottom: 8, lineHeight: 1.4 }}>
+        When the condition becomes true, this panel takes over the full canvas
+        in the viewer. It returns to the normal layout when the condition becomes
+        false again.
+      </p>
+
+      <div className="row">
+        <label>Enabled</label>
+        <button
+          onClick={() => update({ enabled: !current.enabled })}
+          style={{
+            background: current.enabled ? '#22c55e' : '#444',
+            color: '#fff', border: 'none', padding: '4px 12px',
+            borderRadius: 4, cursor: 'pointer', fontWeight: 600, minWidth: 50
+          }}
+        >
+          {current.enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {current.enabled && (
+        <>
+          <div className="row">
+            <label>If var</label>
+            <VarAutocompleteInput
+              value={current.variable}
+              onChange={(v) => update({ variable: v })}
+              placeholder="internal:time_hms"
+              wrapBareVar={false}
+            />
+          </div>
+          <div className="row">
+            <label>Operator</label>
+            <select value={current.op}
+                    onChange={e => update({ op: e.target.value as RuleOp })}>
+              {RULE_OPS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          {current.op !== 'empty' && current.op !== 'notEmpty' && (
+            <div className="row">
+              <label>Value</label>
+              <input
+                value={current.value}
+                onChange={e => update({ value: e.target.value })}
+                placeholder="10"
+              />
+            </div>
+          )}
+
+          {/* Live status indicator */}
+          <div style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            borderRadius: 4,
+            fontSize: 12,
+            background: isActive ? '#0c1f12' : '#141414',
+            border: `1px solid ${isActive ? '#166534' : '#2a2a2a'}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            <span style={{
+              display: 'inline-block',
+              width: 8, height: 8, borderRadius: '50%',
+              background: isActive ? '#22c55e' : '#666',
+              boxShadow: isActive ? '0 0 6px #22c55e88' : 'none'
+            }} />
+            <span style={{ color: isActive ? '#86efac' : '#888' }}>
+              {isActive
+                ? 'Condition is currently true - panel would be focused in viewer'
+                : current.variable
+                  ? 'Condition is currently false'
+                  : 'No variable set'}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useVariableValues } from '../lib/useVariableValues';
+import { evaluateRule } from '../lib/variables';
 import type { Dashboard, Panel, SavedPanelTemplate } from '../types';
 import { PanelView } from '../components/PanelView';
 import { Inspector } from '../components/Inspector';
@@ -199,6 +200,11 @@ export function EditorPage() {
                 values={values}
                 editing={selectedPanelId === p.id}
                 selectedCellId={selectedPanelId === p.id ? selectedCellId : null}
+                focusActive={
+                  !!(p.focusRule?.enabled &&
+                     p.focusRule.variable &&
+                     evaluateRule(p.focusRule, values))
+                }
                 onMouseDownPanel={e => onPanelMouseDown(e, p)}
                 onMouseDownResize={(e, kind) => startDrag(e, p, kind)}
               />
@@ -210,6 +216,7 @@ export function EditorPage() {
           <Inspector
             panel={selectedPanel}
             selectedCellId={selectedCellId}
+            values={values}
             onPanelChange={updatePanel}
             onSelectCell={setSelectedCellId}
             onDelete={() => deletePanel(selectedPanel.id)}

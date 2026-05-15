@@ -27,6 +27,27 @@ export interface ButtonConfig {
   toggleSteps: ButtonAction[];
 }
 
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;
+  op: RuleOp;
+  value: string;
+}
+
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;
+  op: RuleOp;
+  value: string;
+}
+
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;
+  op: RuleOp;
+  value: string;
+}
+
 export interface Cell {
   id: string;
   row: number;
@@ -65,6 +86,7 @@ export interface Panel {
   templateId: string | null;
   name: string;
   button?: ButtonConfig;
+  focusRule?: FocusRule;
 }
 
 export interface Dashboard {

@@ -22,8 +22,50 @@ export interface ButtonConfig {
   toggleSteps: ButtonAction[];
 }
 
+/**
+ * Per-panel auto-focus rule. When the variable matches the operator/value,
+ * the viewer renders this panel full-canvas. Auto-exits when the condition
+ * becomes false. v1: single condition only.
+ */
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;        // 'internal:time_hms', etc. (bare, no $())
+  op: RuleOp;
+  value: string;
+}
+
+/**
+ * Per-panel auto-focus rule. When the rule evaluates true (against live
+ * variable values), the viewer renders this panel fullscreen, covering the
+ * canvas. When the rule goes false again, the viewer returns to the normal
+ * layout. Same operators as ConditionalRule for consistency.
+ */
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;  // 'conn:name'
+  op: RuleOp;
+  value: string;
+}
+
 export function defaultButtonConfig(): ButtonConfig {
   return { enabled: false, mode: 'press', press: null, toggleSteps: [] };
+}
+
+/**
+ * Per-panel auto-focus condition. When `enabled` is true, the viewer
+ * continuously evaluates the rule. While the rule is true, the panel expands
+ * to fill the canvas (above any other panels). When false, the panel returns
+ * to its configured position. Reuses RuleOp from ConditionalRule.
+ */
+export interface FocusRule {
+  enabled: boolean;
+  variable: string;   // 'connection:varname' or '$(connection:varname)'
+  op: RuleOp;
+  value: string;
+}
+
+export function defaultFocusRule(): FocusRule {
+  return { enabled: false, variable: '', op: 'lt', value: '' };
 }
 
 // Cell = one text field. Header is a cell too (full-width, separate flag).
@@ -93,6 +135,8 @@ export interface Panel {
   // Optional panel-level Companion button binding (click anywhere in panel
   // that isn't a button cell triggers this)
   button?: ButtonConfig;
+  // Optional auto-focus rule. When true, viewer renders this panel fullscreen.
+  focusRule?: FocusRule;
 }
 
 export interface Dashboard {

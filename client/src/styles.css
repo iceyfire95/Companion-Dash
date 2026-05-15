@@ -119,6 +119,37 @@ input[type="checkbox"] {
 .cell-button {
   transition: transform 60ms ease, filter 60ms ease;
 }
+
+/* Focus mode: panel fills canvas with quick fade-in */
+.focus-wrap {
+  position: absolute;
+  inset: 0;
+  animation: focus-fade-in 180ms ease-out;
+}
+@keyframes focus-fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Editor: highlight panels whose focus rule currently matches */
+.panel-box.panel-focus-active {
+  box-shadow: 0 0 0 3px #f59e0b, 0 0 18px 4px rgba(245, 158, 11, 0.4);
+}
+.focus-badge {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  background: #f59e0b;
+  color: #1a1a1a;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
 .cell-inner {
   white-space: pre-wrap;
   line-height: 1.2;
@@ -212,6 +243,14 @@ input[type="checkbox"] {
   justify-content: center;
 }
 
+/* When the canvas may exceed the viewport, we need scrollable, top-left
+   anchored behavior instead of centered. The page applies this class in
+   addition to .viewer-wrap when sticky-max sizing is in effect. */
+.viewer-wrap.viewer-scroll {
+  display: block;
+  overflow: auto;
+}
+
 .status-dot {
   display: inline-block;
   width: 8px; height: 8px;
@@ -246,3 +285,29 @@ input[type="checkbox"] {
 .conn-dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
 .conn-dot.off { background: #888; }
 .conn-dot.err { background: #ef4444; box-shadow: 0 0 6px #ef444488; }
+
+/* Focus mode: fullscreen panel fade-in */
+.focus-wrap {
+  position: absolute;
+  inset: 0;
+  animation: focusFadeIn 220ms ease-out;
+}
+@keyframes focusFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Editor indicator when focus rule is currently active */
+.panel-focus-active {
+  outline: 3px solid #22c55e;
+  outline-offset: -3px;
+}
+
+/* Smooth fade-in for a panel that takes over the canvas in viewer */
+.focus-wrap {
+  animation: focus-in 180ms ease-out;
+}
+@keyframes focus-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}

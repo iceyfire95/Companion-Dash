@@ -114,11 +114,18 @@ export interface PanelViewProps {
    * is pressed in an area not handled by a cell button.
    */
   onPanelButtonPress?: () => void;
+  /**
+   * Editor-only: when true, the panel's focus rule is currently evaluating
+   * true. The editor shows a green outline so the user can verify their rule
+   * fires without switching to viewer.
+   */
+  focusActive?: boolean;
 }
 
 export function PanelView({
   panel, values, selected, editing, selectedCellId, headerHeightRatio = 0.25,
-  onMouseDownPanel, onMouseDownResize, onCellButtonPress, onPanelButtonPress
+  onMouseDownPanel, onMouseDownResize, onCellButtonPress, onPanelButtonPress,
+  focusActive
 }: PanelViewProps) {
   const gridTemplate: CSSProperties = {
     gridTemplateRows: `repeat(${panel.rows}, 1fr)`,
@@ -130,7 +137,7 @@ export function PanelView({
 
   return (
     <div
-      className={`panel-box ${editing ? 'editing' : ''} ${selected ? 'selected' : ''}`}
+      className={`panel-box ${editing ? 'editing' : ''} ${selected ? 'selected' : ''} ${focusActive ? 'panel-focus-active' : ''}`}
       onMouseDown={onMouseDownPanel}
       onClick={onPanelButtonPress && panel.button?.enabled
         ? (e) => {
@@ -151,6 +158,7 @@ export function PanelView({
         ...(onPanelButtonPress && panel.button?.enabled ? { cursor: 'pointer' } : {})
       }}
     >
+      {focusActive && <div className="focus-badge">FOCUS</div>}
       {panel.headerEnabled && panel.header && (
         <div
           style={{

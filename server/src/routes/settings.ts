@@ -32,4 +32,20 @@ r.get('/status', (_req, res) => {
   res.json(poller.getStatus());
 });
 
+/**
+ * Returns the union of all variable names the dashboard knows about.
+ * Used by autocomplete to suggest completions when the user types $(.
+ * Includes watched names AND any name that's currently in the polled set
+ * (panel-referenced).
+ */
+r.get('/variable-names', (_req, res) => {
+  const watched = db.getWatchedNames();
+  const polled = Object.keys(poller.getAll());
+  // Also include the poller's "wanted" set since those are referenced but may
+  // not yet have values (e.g. just added to a panel, first poll pending).
+  const wanted = poller.getWanted();
+  const all = new Set<string>([...watched, ...polled, ...wanted]);
+  res.json({ names: [...all].sort() });
+});
+
 export default r;

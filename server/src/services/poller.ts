@@ -96,6 +96,11 @@ export class CompanionPoller extends EventEmitter {
     return Object.fromEntries(this.values);
   }
 
+  /** Names of variables currently being polled. */
+  getWanted(): string[] {
+    return [...this.wanted];
+  }
+
   start(): void {
     if (this.timer) return;
     if (!this.cfg.enabled) return;

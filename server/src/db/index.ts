@@ -5,6 +5,7 @@ import { join } from 'path';
 import type {
   Dashboard, Panel, SavedPanelTemplate, CompanionConfig
 } from '../types.js';
+import { newId } from '../types.js';
 
 const DATA_DIR = join(homedir(), '.companion-web-dashboard');
 const DB_PATH = process.env.CWD_DB_PATH ?? join(DATA_DIR, 'data.db');
@@ -45,6 +46,13 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS watched_variables (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_watched_name ON watched_variables(name);
 `);
 
 /**
@@ -177,6 +185,100 @@ export function getCompanionConfig(): CompanionConfig {
 
 export function setCompanionConfig(cfg: CompanionConfig): void {
   setSetting(COMPANION_KEY, cfg);
+}
+
+// --- Watched variables ---
+// User-curated list of `connection:varname` strings to poll regardless of
+// whether they're referenced by any panel. Lets users discover/preview all
+// the variables they care about from a single page.
+
+export interface WatchedVariable {
+  id: string;
+  name: string;       // 'atem:pgm1_input', 'custom:cue', 'internal:time_hms', etc.
+  createdAt: number;
+}
+
+export function listWatchedVariables(): WatchedVariable[] {
+  const rows = db.prepare(
+    'SELECT id, name, created_at AS createdAt FROM watched_variables ORDER BY name ASC'
+  ).all() as unknown as WatchedVariable[];
+  return rows;
+}
+
+export function getWatchedNames(): string[] {
+  return listWatchedVariables().map(w => w.name);
+}
+
+/**
+ * Adds one watched variable. Returns the row, or the existing row if the name
+ * was already watched (idempotent).
+ */
+export function addWatchedVariable(rawName: string): WatchedVariable {
+  const name = normaliseVarName(rawName);
+  if (!name) throw new Error(`invalid variable name: ${rawName}`);
+  const existing = db.prepare('SELECT id, name, created_at AS createdAt FROM watched_variables WHERE name = ?').get(name) as unknown as WatchedVariable | undefined;
+  if (existing) return existing;
+  const row: WatchedVariable = { id: newId(), name, createdAt: Date.now() };
+  db.prepare('INSERT INTO watched_variables (id, name, created_at) VALUES (?, ?, ?)')
+    .run(row.id, row.name, row.createdAt);
+  return row;
+}
+
+/**
+ * Bulk add. Accepts an array OR a multi-line string (textarea paste).
+ * Each entry can be either bare `conn:name` or wrapped `$(conn:name)`.
+ * Lines with no colon are skipped. Returns the list of successfully added/
+ * existing rows.
+ */
+export function addWatchedVariablesBulk(input: string | string[]): {
+  added: WatchedVariable[];
+  skipped: string[];
+} {
+  const lines = Array.isArray(input) ? input : input.split(/[\r\n]+/);
+  const added: WatchedVariable[] = [];
+  const skipped: string[] = [];
+  for (const raw of lines) {
+    const name = normaliseVarName(raw);
+    if (!name) {
+      const trimmed = raw.trim();
+      if (trimmed) skipped.push(trimmed);
+      continue;
+    }
+    try {
+      added.push(addWatchedVariable(name));
+    } catch {
+      skipped.push(raw.trim());
+    }
+  }
+  return { added, skipped };
+}
+
+export function removeWatchedVariable(id: string): void {
+  db.prepare('DELETE FROM watched_variables WHERE id = ?').run(id);
+}
+
+export function removeWatchedVariableByName(name: string): void {
+  const n = normaliseVarName(name);
+  if (n) db.prepare('DELETE FROM watched_variables WHERE name = ?').run(n);
+}
+
+/**
+ * Accepts: 'atem:pgm1_input', '$(atem:pgm1_input)', '  atem:pgm1_input  '.
+ * Returns the canonical form `conn:name`, or null if not a valid variable id.
+ */
+function normaliseVarName(raw: string): string | null {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  // Strip $(...) wrapper
+  const m = s.match(/^\$\(([^)]+)\)$/);
+  if (m) s = m[1].trim();
+  // Must contain exactly one colon and non-empty parts on both sides
+  const i = s.indexOf(':');
+  if (i <= 0 || i === s.length - 1) return null;
+  // No spaces allowed
+  if (/\s/.test(s)) return null;
+  return s;
 }
 
 export { db };

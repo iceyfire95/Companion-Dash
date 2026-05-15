@@ -45,6 +45,7 @@ export const api = {
     j<CompanionConfig>('/api/settings/companion', { method: 'PUT', body: JSON.stringify(cfg) }),
   getValues: () => j<Record<string, string>>('/api/settings/values'),
   getStatus: () => j<PollerStatus>('/api/settings/status'),
+  getVariableNames: () => j<{ names: string[] }>('/api/settings/variable-names'),
 
   // Buttons
   triggerButton: (panelId: string, cellId: string | null) =>
@@ -61,8 +62,27 @@ export const api = {
     j<{ ok: boolean }>('/api/buttons/reset', {
       method: 'POST',
       body: JSON.stringify({ panelId, cellId })
-    })
+    }),
+
+  // Watched variables
+  listWatched: () => j<WatchedVariable[]>('/api/watched-variables'),
+  addWatched: (name: string) =>
+    j<{ added: WatchedVariable[]; skipped: string[] }>('/api/watched-variables', {
+      method: 'POST', body: JSON.stringify({ name })
+    }),
+  addWatchedBulk: (names: string) =>
+    j<{ added: WatchedVariable[]; skipped: string[] }>('/api/watched-variables', {
+      method: 'POST', body: JSON.stringify({ names })
+    }),
+  removeWatched: (id: string) =>
+    j<void>(`/api/watched-variables/${id}`, { method: 'DELETE' })
 };
+
+export interface WatchedVariable {
+  id: string;
+  name: string;
+  createdAt: number;
+}
 
 export interface PollerStatus {
   enabled: boolean;
