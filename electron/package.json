@@ -1,6 +1,6 @@
 {
   "name": "companion-web-dashboard-app",
-  "version": "0.3.0-alpha",
+  "version": "0.4.0-alpha",
   "private": true,
   "description": "Companion Web Dashboard - desktop app wrapper",
   "author": {

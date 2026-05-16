@@ -42,7 +42,3 @@ After first launch they open normally.
 - Multi-page dashboards
 - Custom fonts
 - Embedded video / iframe cells
-
-## For developers
-
-See [DEVELOPER.md](./DEVELOPER.md) for build instructions, repo layout, and contribution notes.
