@@ -1,0 +1,20 @@
+[Unit]
+Description=Companion Web Dashboard
+Documentation=https://github.com/iceyfire95/Companion-Dash
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Run as the same user that installs / starts the service.
+# Override with:  sudo systemctl edit companion-web-dashboard
+# and set [Service] User=youruser
+ExecStart=/opt/companion-web-dashboard/run.sh
+Restart=on-failure
+RestartSec=3
+Environment=PORT=3000
+# Data is written under $HOME/.companion-web-dashboard
+# When run as root via systemd, that's /root/.companion-web-dashboard
+
+[Install]
+WantedBy=multi-user.target

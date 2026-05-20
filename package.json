@@ -16,6 +16,8 @@
 
     "win:build": "npm run build && cd server && npm prune --omit=dev && cd ../electron && npm run dist:win",
 
+    "linux:build": "bash linux/scripts/build-deb.sh",
+
     "release:all": "npm run build && cd server && npm prune --omit=dev && cd ../electron && npm run dist:all",
 
     "rehydrate-server": "cd server && npm install"

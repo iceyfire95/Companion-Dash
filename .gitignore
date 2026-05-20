@@ -13,3 +13,6 @@ electron/build/icon.iconset/
 electron/build/icon.png
 electron/out/
 **/.DS_Store
+
+# Linux build artifacts
+linux/.build/

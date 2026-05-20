@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+# Reload systemd so the new unit file is picked up
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+fi
+
+cat <<EOF
+
+Companion Web Dashboard installed.
+
+  Run once (foreground):
+      companion-web-dashboard
+
+  Or as a service:
+      sudo systemctl start companion-web-dashboard
+      sudo systemctl enable companion-web-dashboard   # auto-start on boot
+
+  Then open:
+      http://<this-pi-ip>:3000
+
+  Data is stored in \$HOME/.companion-web-dashboard/
+
+EOF
+
+exit 0
