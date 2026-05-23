@@ -1,6 +1,9 @@
 import type {
   Dashboard, Panel, SavedPanelTemplate, CompanionConfig, ButtonAction
 } from '../types';
+import type {
+  TallySource, AutoPopulateRequest, AutoPopulateResult
+} from './tally';
 
 async function j<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const r = await fetch(input, {
@@ -75,7 +78,26 @@ export const api = {
       method: 'POST', body: JSON.stringify({ names })
     }),
   removeWatched: (id: string) =>
-    j<void>(`/api/watched-variables/${id}`, { method: 'DELETE' })
+    j<void>(`/api/watched-variables/${id}`, { method: 'DELETE' }),
+
+  // Tally sources
+  listTallySources: () => j<TallySource[]>('/api/tally-sources'),
+  getTallySourceBySlug: (slug: string) =>
+    j<TallySource>(`/api/tally-sources/by-slug/${encodeURIComponent(slug)}`),
+  createTallySource: (data: Partial<TallySource>) =>
+    j<TallySource>('/api/tally-sources', { method: 'POST', body: JSON.stringify(data) }),
+  updateTallySource: (id: string, data: Partial<TallySource>) =>
+    j<TallySource>(`/api/tally-sources/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTallySource: (id: string) =>
+    j<void>(`/api/tally-sources/${id}`, { method: 'DELETE' }),
+  previewAutoPopulate: (req: AutoPopulateRequest) =>
+    j<AutoPopulateResult>('/api/tally-sources/auto-populate/preview', {
+      method: 'POST', body: JSON.stringify(req)
+    }),
+  bulkCreateTallySources: (items: Array<Partial<TallySource>>) =>
+    j<{ created: TallySource[] }>('/api/tally-sources/bulk', {
+      method: 'POST', body: JSON.stringify({ items })
+    })
 };
 
 export interface WatchedVariable {

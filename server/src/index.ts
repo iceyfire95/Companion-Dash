@@ -12,8 +12,15 @@ import savedPanelsRouter from './routes/savedPanels.js';
 import settingsRouter from './routes/settings.js';
 import buttonsRouter from './routes/buttons.js';
 import watchedVariablesRouter from './routes/watchedVariables.js';
+import tallySourcesRouter from './routes/tallySources.js';
 import { poller } from './services/poller.js';
 import { rebuildWantedVariables } from './services/orchestrator.js';
+import { db } from './db/index.js';
+import { initTallyDb } from './db/tally.js';
+
+// Initialise tally table on the shared sqlite handle before any route
+// touches it.
+initTallyDb(db);
 
 const PORT = Number(process.env.PORT ?? 3000);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,6 +39,7 @@ app.use('/api/saved-panels', savedPanelsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/buttons', buttonsRouter);
 app.use('/api/watched-variables', watchedVariablesRouter);
+app.use('/api/tally-sources', tallySourcesRouter);
 
 // Serve built client when present (production single-port)
 const clientDist = join(__dirname, '..', '..', 'client', 'dist');

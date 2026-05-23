@@ -30,6 +30,7 @@ export function HomePage() {
       <div className="toolbar">
         <h1>Companion Web Dashboard</h1>
         <div className="spacer" />
+        <Link to="/tally"><button>Tally</button></Link>
         <Link to="/variables"><button>Variables</button></Link>
         <Link to="/settings"><button>Settings</button></Link>
       </div>
