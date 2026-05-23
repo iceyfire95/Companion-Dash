@@ -61,21 +61,36 @@ CREATE INDEX IF NOT EXISTS idx_watched_name ON watched_variables(name);
  */
 
 // --- Dashboards ---
+// background_fit lives on the dashboards table; the actual image bytes
+// live in dashboard_backgrounds. We expose background_fit + a derived
+// has_background boolean so the client doesn't need a second round-trip
+// to know whether to render a background <img>.
+const DASHBOARD_COLS = `
+  id, name, width, height, bg_color AS bgColor,
+  COALESCE(background_fit, 'cover') AS backgroundFit,
+  EXISTS(SELECT 1 FROM dashboard_backgrounds WHERE dashboard_id = dashboards.id) AS hasBackground,
+  created_at AS createdAt, updated_at AS updatedAt`;
+
+function rowToDashboard(row: any): Dashboard {
+  return {
+    ...row,
+    // SQLite EXISTS returns 0/1, normalise to boolean.
+    hasBackground: !!row.hasBackground
+  };
+}
+
 export function listDashboards(): Dashboard[] {
-  return db.prepare(
-    `SELECT id, name, width, height, bg_color AS bgColor,
-            created_at AS createdAt, updated_at AS updatedAt
-     FROM dashboards ORDER BY updated_at DESC`
-  ).all() as unknown as Dashboard[];
+  const rows = db.prepare(
+    `SELECT ${DASHBOARD_COLS} FROM dashboards ORDER BY updated_at DESC`
+  ).all() as any[];
+  return rows.map(rowToDashboard);
 }
 
 export function getDashboard(id: string): Dashboard | undefined {
   const row = db.prepare(
-    `SELECT id, name, width, height, bg_color AS bgColor,
-            created_at AS createdAt, updated_at AS updatedAt
-     FROM dashboards WHERE id = ?`
-  ).get(id);
-  return row ? (row as unknown as Dashboard) : undefined;
+    `SELECT ${DASHBOARD_COLS} FROM dashboards WHERE id = ?`
+  ).get(id) as any;
+  return row ? rowToDashboard(row) : undefined;
 }
 
 export function insertDashboard(d: Dashboard): void {
@@ -87,9 +102,11 @@ export function insertDashboard(d: Dashboard): void {
 
 export function updateDashboard(d: Dashboard): void {
   db.prepare(
-    `UPDATE dashboards SET name=?, width=?, height=?, bg_color=?, updated_at=?
+    `UPDATE dashboards SET name=?, width=?, height=?, bg_color=?,
+                           background_fit=?, updated_at=?
      WHERE id=?`
-  ).run(d.name, d.width, d.height, d.bgColor, d.updatedAt, d.id);
+  ).run(d.name, d.width, d.height, d.bgColor,
+        d.backgroundFit ?? 'cover', d.updatedAt, d.id);
 }
 
 export function deleteDashboard(id: string): void {

@@ -5,6 +5,7 @@ import { useVariableValues } from '../lib/useVariableValues';
 import { evaluateRule } from '../lib/variables';
 import type { Dashboard, Panel } from '../types';
 import { PanelView } from '../components/PanelView';
+import { DashboardBackground } from '../lib/DashboardBackground';
 
 export function ViewerPage() {
   const { dashboardId = '' } = useParams();
@@ -48,6 +49,7 @@ export function ViewerPage() {
       designHeight={dashboard.height}
       bgColor={dashboard.bgColor}
     >
+      <DashboardBackground dashboard={dashboard} />
       {focusedPanel ? (
         <FocusedPanel
           panel={focusedPanel}

@@ -6,6 +6,7 @@ import { evaluateRule } from '../lib/variables';
 import type { Dashboard, Panel, SavedPanelTemplate } from '../types';
 import { PanelView } from '../components/PanelView';
 import { Inspector } from '../components/Inspector';
+import { DashboardBackground } from '../lib/DashboardBackground';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -193,6 +194,7 @@ export function EditorPage() {
               background: dashboard.bgColor
             }}
           >
+            <DashboardBackground dashboard={dashboard} />
             {panels.map(p => (
               <PanelWithCellIds
                 key={p.id}
@@ -220,13 +222,21 @@ export function EditorPage() {
             onSelectCell={setSelectedCellId}
             onDelete={() => deletePanel(selectedPanel.id)}
             onSaveTemplate={() => saveAsTemplate(selectedPanel)}
+            dashboard={dashboard}
+            onDashboardChange={setDashboard}
           />
         ) : (
-          <div className="inspector">
-            <div style={{ color: '#888', fontSize: 13 }}>
-              No panel selected. Click a panel, or click + Add panel.
-            </div>
-          </div>
+          <Inspector
+            panel={null}
+            selectedCellId={null}
+            values={values}
+            onPanelChange={() => {}}
+            onSelectCell={() => {}}
+            onDelete={() => {}}
+            onSaveTemplate={() => {}}
+            dashboard={dashboard}
+            onDashboardChange={setDashboard}
+          />
         )}
       </div>
     </div>

@@ -134,6 +134,14 @@ export interface Dashboard {
   width: number;              // canvas width (px) - 0 for fluid
   height: number;
   bgColor: string;
+  /**
+   * How the optional background image fits the canvas.
+   * Always present (defaults to 'cover'); the image itself is in
+   * dashboard_backgrounds and only present when hasBackground is true.
+   */
+  backgroundFit?: 'cover' | 'contain' | 'stretch';
+  /** True when this dashboard has a background image uploaded. */
+  hasBackground?: boolean;
   createdAt: number;
   updatedAt: number;
 }

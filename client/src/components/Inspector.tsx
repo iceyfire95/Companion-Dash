@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { Panel, Cell, ConditionalRule, Condition, RuleOp, ButtonConfig, ButtonAction, FocusRule } from '../types';
+import { useRef, useState } from 'react';
+import type { Panel, Cell, ConditionalRule, Condition, RuleOp, ButtonConfig, ButtonAction, FocusRule, Dashboard } from '../types';
 import { api } from '../lib/api';
 import { VarAutocompleteTextarea, VarAutocompleteInput } from '../lib/autocomplete';
 import { evaluateRule } from '../lib/variables';
@@ -37,7 +37,12 @@ function newRule(): ConditionalRule {
 }
 
 interface Props {
-  panel: Panel;
+  /**
+   * Selected panel, or null when nothing is selected. The dashboard-
+   * level controls (background image, etc.) render regardless of
+   * selection so the user can manage them from the empty state too.
+   */
+  panel: Panel | null;
   selectedCellId: string | null;
   onPanelChange: (p: Panel) => void;
   onSelectCell: (id: string | null) => void;
@@ -45,12 +50,34 @@ interface Props {
   onSaveTemplate: () => void;
   /** Current variable values - used to live-preview the focus rule. */
   values: Record<string, string>;
+  /**
+   * The dashboard currently being edited. Drives background controls
+   * and the canvas-relative alignment math.
+   */
+  dashboard: Dashboard;
+  /**
+   * Notifies the editor of dashboard-level changes (background upload,
+   * fit mode etc) so it can update its state and re-render.
+   */
+  onDashboardChange: (d: Dashboard) => void;
 }
 
 export function Inspector({
   panel, selectedCellId, onPanelChange, onSelectCell, onDelete, onSaveTemplate,
-  values
+  values, dashboard, onDashboardChange
 }: Props) {
+  // When no panel is selected, render only the dashboard-level section.
+  if (!panel) {
+    return (
+      <div className="inspector">
+        <DashboardSection dashboard={dashboard} onDashboardChange={onDashboardChange} />
+        <div style={{ color: '#888', fontSize: 13, padding: '8px 0' }}>
+          Click a panel, or click + Add panel to edit a panel.
+        </div>
+      </div>
+    );
+  }
+
   const updatePanel = (patch: Partial<Panel>) => onPanelChange({ ...panel, ...patch });
 
   // Find selected cell
@@ -98,6 +125,7 @@ export function Inspector({
 
   return (
     <div className="inspector">
+      <DashboardSection dashboard={dashboard} onDashboardChange={onDashboardChange} />
       <section>
         <h3>Panel</h3>
         <div className="row">
@@ -118,6 +146,7 @@ export function Inspector({
           <input type="number" value={Math.round(panel.height)}
                  onChange={e => updatePanel({ height: Math.max(40, Number(e.target.value)) })} />
         </div>
+        <AlignButtons panel={panel} dashboard={dashboard} onPanelChange={onPanelChange} />
         <div className="row">
           <label>Background</label>
           <input type="color" value={panel.bgColor}
@@ -819,5 +848,181 @@ function FocusRuleEditor({
         </>
       )}
     </div>
+  );
+}
+
+// ===========================================================================
+// Dashboard-level controls (background image + fit mode).
+//
+// Lives at the top of the inspector regardless of panel selection so the
+// user can manage background settings from the empty state too. State
+// changes propagate via onDashboardChange so the editor / canvas re-render
+// immediately.
+// ===========================================================================
+function DashboardSection({
+  dashboard, onDashboardChange
+}: {
+  dashboard: Dashboard;
+  onDashboardChange: (d: Dashboard) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fit = dashboard.backgroundFit ?? 'cover';
+
+  async function handleFile(file: File | null) {
+    if (!file) return;
+    setError(null);
+    // Hard reject unsupported types before sending to keep the error
+    // message immediate. Server enforces the same allowlist.
+    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+      setError('PNG or JPEG only.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.uploadDashboardBackground(dashboard.id, file);
+      onDashboardChange(updated);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function removeBackground() {
+    if (!confirm('Remove background image?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.removeDashboardBackground(dashboard.id);
+      onDashboardChange(updated);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeFit(next: 'cover' | 'contain' | 'stretch') {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.setDashboardBackgroundFit(dashboard.id, next);
+      onDashboardChange(updated);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <h3>Dashboard</h3>
+      <div className="row">
+        <label>Background</label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          onChange={e => handleFile(e.target.files?.[0] ?? null)}
+          disabled={busy}
+          style={{ flex: 1, fontSize: 12 }}
+        />
+        {dashboard.hasBackground && (
+          <button
+            className="danger"
+            onClick={removeBackground}
+            disabled={busy}
+            title="Remove background image"
+            style={{ padding: '3px 8px', fontSize: 11 }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      <div className="row">
+        <label>Fit</label>
+        <select
+          value={fit}
+          onChange={e => changeFit(e.target.value as 'cover' | 'contain' | 'stretch')}
+          disabled={busy || !dashboard.hasBackground}
+          style={{ flex: 1 }}
+        >
+          <option value="cover">Cover (fill, crop edges)</option>
+          <option value="contain">Contain (fit, letterbox)</option>
+          <option value="stretch">Stretch (distort to fill)</option>
+        </select>
+      </div>
+      {error && (
+        <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>
+          {error}
+        </div>
+      )}
+      {dashboard.hasBackground && (
+        <div style={{ color: '#666', fontSize: 11, marginTop: 4 }}>
+          PNG/JPEG, up to 8MB. Scales with the canvas; preserved across
+          window resizes.
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ===========================================================================
+// Panel alignment buttons.
+//
+// Six canvas-relative align buttons (left/center/right, top/middle/bottom).
+// Each computes the new x or y from canvas size and panel size, then
+// dispatches an updatePanel via onPanelChange. The buttons use unicode
+// glyphs so we don't need to pull in an icon set.
+// ===========================================================================
+function AlignButtons({
+  panel, dashboard, onPanelChange
+}: {
+  panel: Panel;
+  dashboard: Dashboard;
+  onPanelChange: (p: Panel) => void;
+}) {
+  const W = dashboard.width;
+  const H = dashboard.height;
+
+  // Each button returns the patch to merge into the panel. Math is clamped
+  // to 0 so panels can't be pushed off the top/left when wider/taller than
+  // the canvas (rare but possible if user resizes the dashboard down).
+  function applyH(mode: 'left' | 'center' | 'right') {
+    let x = 0;
+    if (mode === 'center') x = Math.round((W - panel.width) / 2);
+    if (mode === 'right')  x = Math.max(0, W - panel.width);
+    onPanelChange({ ...panel, x });
+  }
+  function applyV(mode: 'top' | 'middle' | 'bottom') {
+    let y = 0;
+    if (mode === 'middle') y = Math.round((H - panel.height) / 2);
+    if (mode === 'bottom') y = Math.max(0, H - panel.height);
+    onPanelChange({ ...panel, y });
+  }
+
+  const btn: React.CSSProperties = {
+    padding: '4px 8px', fontSize: 12, minWidth: 32, lineHeight: 1
+  };
+
+  return (
+    <>
+      <div className="row">
+        <label>Align H</label>
+        <button onClick={() => applyH('left')}   title="Align left edge to canvas" style={btn}>⇤</button>
+        <button onClick={() => applyH('center')} title="Center horizontally"        style={btn}>⇔</button>
+        <button onClick={() => applyH('right')}  title="Align right edge to canvas" style={btn}>⇥</button>
+      </div>
+      <div className="row">
+        <label>Align V</label>
+        <button onClick={() => applyV('top')}    title="Align top edge to canvas"    style={btn}>⤒</button>
+        <button onClick={() => applyV('middle')} title="Center vertically"           style={btn}>⇕</button>
+        <button onClick={() => applyV('bottom')} title="Align bottom edge to canvas" style={btn}>⤓</button>
+      </div>
+    </>
   );
 }

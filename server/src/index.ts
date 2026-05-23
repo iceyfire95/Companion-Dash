@@ -17,10 +17,12 @@ import { poller } from './services/poller.js';
 import { rebuildWantedVariables } from './services/orchestrator.js';
 import { db } from './db/index.js';
 import { initTallyDb } from './db/tally.js';
+import { initBackgroundsDb, MAX_BACKGROUND_BYTES } from './db/backgrounds.js';
 
-// Initialise tally table on the shared sqlite handle before any route
-// touches it.
+// Initialise extension tables on the shared sqlite handle before any
+// route touches them.
 initTallyDb(db);
+initBackgroundsDb(db);
 
 const PORT = Number(process.env.PORT ?? 3000);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +32,9 @@ const httpServer = createServer(app);
 const io = new IOServer(httpServer, { cors: { origin: '*' } });
 
 app.use(cors());
+// JSON body parser stays modest. Background uploads use express.raw() on
+// their own route with the higher MAX_BACKGROUND_BYTES cap, so we don't
+// need to inflate the global JSON limit.
 app.use(express.json({ limit: '4mb' }));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -52,7 +57,6 @@ if (existsSync(clientDist)) {
 
 // --- Socket.io: emit variable changes to viewers ---
 io.on('connection', (socket) => {
-  // Send full snapshot on connect
   socket.emit('values:snapshot', poller.getAll());
 });
 
@@ -65,5 +69,5 @@ rebuildWantedVariables();
 poller.start();
 
 httpServer.listen(PORT, () => {
-  console.log(`[server] listening on http://localhost:${PORT}`);
+  console.log(`[server] listening on http://localhost:${PORT} (bg upload cap ${(MAX_BACKGROUND_BYTES / (1024 * 1024)).toFixed(0)}MB)`);
 });

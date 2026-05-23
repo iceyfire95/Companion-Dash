@@ -106,6 +106,10 @@ export interface Dashboard {
   width: number;
   height: number;
   bgColor: string;
+  /** Fit mode for the optional background image. Defaults to 'cover'. */
+  backgroundFit?: 'cover' | 'contain' | 'stretch';
+  /** True when this dashboard has a background image uploaded. */
+  hasBackground?: boolean;
   createdAt: number;
   updatedAt: number;
 }

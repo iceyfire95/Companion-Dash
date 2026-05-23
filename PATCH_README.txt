@@ -1,102 +1,98 @@
-Companion-Dash v0.6.0-alpha — Auto-populate tally sources
-=========================================================
+Companion-Dash v0.7.0-alpha — Background images + panel alignment
+==================================================================
 
 Apply: from repo root, extract this tar.gz, accept overwrites.
 
     cd ~/Documents/git/companion-web-dashboard
-    tar -xzvf companion-dash-v0.6.0-auto-tally.tar.gz
+    tar -xzvf companion-dash-v0.7.0-bg-align.tar.gz
 
-No new npm dependencies. Existing data.db is migrated automatically on
-first server boot (two new columns ALTERed into tally_sources). The
-existing tally feature from v0.5.0 still works unchanged for sources
-that don't use match-value mode.
+Prerequisite: v0.6.0-alpha (this patch builds on that base).
 
-NOTE: applies cleanly on top of either v0.4.0 OR v0.5.0. If you're
-applying on top of v0.4.0 (i.e. skipping the v0.5.0 patch), this
-single bundle contains the entire tally feature plus auto-populate.
+No new npm dependencies. SQLite migration runs automatically on first
+server boot — adds `background_fit` column to dashboards table and
+creates `dashboard_backgrounds` table. Existing dashboards keep
+working unchanged.
 
-What's new in v0.6.0
---------------------
+What's new
+----------
 
-1. **Auto-populate wizard.** On the Tally page, click the new
-   "⚡ Auto-populate from connection" button. Pick TSL listener /
-   vMix / ATEM, type your Companion connection label, set the
-   input count, and the dashboard probes Companion for each input
-   and proposes a list of TallySources you can review/edit before
-   saving in bulk.
+1. **Background images.** Upload a PNG or JPEG as the canvas
+   background, per dashboard. Image sits at design coordinates
+   (i.e. behind your panels in the same 1920×1080 design space) and
+   scales lockstep with the canvas as the viewer / editor zooms or
+   resizes.
 
-2. **Match-value mode** for tally sources. A new optional field on
-   TallySource — `pvwMatchValue` / `pgmMatchValue`. When set, "on"
-   means the raw variable value *equals* that string (after trim).
-   When empty, falls back to existing truthy detection.
+   Three fit modes:
+   - **Cover** — image fills the canvas, edges may be cropped
+   - **Contain** — image fits inside the canvas, letterbox if needed
+   - **Stretch** — image is distorted to exact canvas dimensions
 
-   Required for ATEM. ATEM exposes tally as a single input-id
-   pointer (`atem:pgm1_input_id = "5"`), so to make per-camera
-   tally lights you need "is the pointer equal to MY camera number".
+   Image stored in SQLite as a blob (so backups are still one file).
+   Hard cap: 8MB. Served with proper Cache-Control + ETag headers so
+   the browser caches across navigations but always sees fresh uploads.
 
-   The manual "Add tally source" dialog also gained these fields.
-   Leave them blank for TSL/vMix; fill in for ATEM (auto-populate
-   does this for you automatically).
+   Controls live in the Inspector's new "Dashboard" section at the
+   top — works whether a panel is selected or not.
 
-Files added:
-  server/src/services/tallyAutoPopulate.ts (new)
-  client/src/pages/AutoPopulateWizard.tsx  (new)
+2. **Panel alignment buttons.** Six new buttons in the Inspector's
+   panel section, just below W/H:
+   - Align H: left edge ⇤ / horizontal center ⇔ / right edge ⇥
+   - Align V: top edge ⤒ / vertical center ⇕ / bottom edge ⤓
 
-Files modified (vs upstream main):
-  server/src/types-tally.ts                (match value fields)
-  server/src/db/tally.ts                   (migration + match cols)
-  server/src/routes/tallySources.ts        (preview + bulk endpoints)
-  server/src/index.ts                      (mount tally route)
-  server/src/services/orchestrator.ts      (merge tally vars)
-  client/src/lib/tally.ts                  (match mode + types)
-  client/src/lib/api.ts                    (new endpoints)
-  client/src/main.tsx                      (routes)
-  client/src/pages/HomePage.tsx            (Tally nav button)
-  client/src/pages/TallyHubPage.tsx        (wizard hook + match cols)
-  client/src/pages/TallyViewerPage.tsx    (carry-over from v0.5.0)
-  package.json / server/package.json / client/package.json
-    / electron/package.json                (version → 0.6.0-alpha)
+   Each aligns the selected panel canvas-relative — the math is just
+   `x = (canvasWidth - panelWidth) / 2` for centering, edge alignments
+   are obvious. Clamped to 0 so panels can't be pushed off-canvas
+   if the dashboard was resized smaller than the panel.
 
-How auto-populate works per module
-----------------------------------
+   Multi-panel distribute / align-to-each-other is NOT in this
+   release — that needs multi-select first. Easy follow-up if you
+   want it.
 
-* **TSL listener** — boolean-style tally. Probes
-  `<conn>:tally_<N>_label` for the name. Uses
-  `<conn>:tally_<N>_tally1` (PVW) and `<conn>:tally_<N>_tally2` (PGM)
-  by default; configurable in the wizard if your switcher uses
-  different bits. Truthy mode (no match value).
+Files added
+-----------
+  server/src/db/backgrounds.ts         (blob storage + fit mode)
+  client/src/lib/DashboardBackground.tsx (shared canvas image component)
 
-* **vMix** — boolean-style tally per input per mix. Probes
-  `<conn>:input_<N>_name`. Uses
-  `<conn>:input_<N>_mix_<M>_tally_preview` and `_tally_program`.
-  Mix number configurable. Truthy mode.
+Files modified
+--------------
+  server/src/types.ts                  (Dashboard.backgroundFit / hasBackground)
+  server/src/db/index.ts               (include backgroundFit in reads, migration)
+  server/src/routes/dashboards.ts      (upload / fetch / delete / fit endpoints)
+  server/src/index.ts                  (init backgrounds db)
+  client/src/types.ts                  (Dashboard interface mirror)
+  client/src/lib/api.ts                (background API methods)
+  client/src/components/Inspector.tsx  (Dashboard section + AlignButtons)
+  client/src/pages/EditorPage.tsx      (render bg + pass dashboard to Inspector)
+  client/src/pages/ViewerPage.tsx      (render bg)
+  package.json + 3 sub-package.json    (version → 0.7.0-alpha)
 
-* **ATEM** — input-id pointer style. Probes `<conn>:long_<N>`
-  for the long input name. Uses `<conn>:pvw<ME>_input_id` and
-  `<conn>:pgm<ME>_input_id` as the pvw/pgm vars, with the input
-  number as the match value. So input 5 is on PGM iff
-  `pgm1_input_id == "5"`. Match mode.
+New endpoints
+-------------
+  POST   /api/dashboards/:id/background       (upload raw image bytes)
+  GET    /api/dashboards/:id/background       (fetch image bytes, with ETag)
+  DELETE /api/dashboards/:id/background       (clear)
+  PUT    /api/dashboards/:id/background-fit   (body: {fit: cover|contain|stretch})
 
-Smoke-tested end-to-end against a mock Companion: preview probes
-return correct labels for known inputs and fallback names for
-unknown ones; bulk-insert persists the rows with correct match
-values; the orchestrator merges the new vars into the polling
-set; the by-slug endpoint serves correct sources to the
-fullscreen viewer.
+The PUT /api/dashboards/:id endpoint also now accepts backgroundFit in
+its body alongside the existing name/width/height/bgColor fields.
 
-Existing v0.5.0 tally sources continue working unchanged because
-empty match values fall through to truthy detection (= old
-behaviour).
+Smoke tested
+------------
+- upload PNG → bytes survive a fetch round-trip byte-for-byte
+- fit-mode change persists and is returned in dashboard JSON
+- SVG rejected (415 with helpful error)
+- invalid fit rejected (400)
+- delete background → hasBackground:false, fit preserved
+- delete dashboard → bg row cascades cleanly (FOREIGN KEY ON DELETE CASCADE)
+- migration from a pre-v0.7 dashboards table → ALTER TABLE adds
+  background_fit, existing rows preserved with default 'cover'
+- align math: 200x100 panel in 1920x1080 → centered = (860, 490);
+  right+bottom = (1720, 980)
 
 Known gaps (not blockers)
 -------------------------
-
-* CONTEXT.md not updated.
-* Probe times out at 1.5s per variable; with concurrency 8, a
-  32-input scan takes about 1-3 seconds end-to-end against a
-  responsive Companion.
-* TSL listener publishes its variables only AFTER the first tally
-  packet arrives. If your TSL listener has never received any data,
-  the wizard will mark everything unconfirmed — but you can still
-  check the rows and create them; once data starts flowing the
-  variables will resolve and tally lights will go live.
+- CONTEXT.md not updated.
+- No multi-panel selection yet, so no distribute / align-to-each-other
+  buttons. Canvas-relative align only.
+- No image preview thumbnail in the Inspector — too easy to bloat the
+  sidebar; you see the live background in the canvas anyway.

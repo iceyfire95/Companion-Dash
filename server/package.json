@@ -1,6 +1,6 @@
 {
   "name": "companion-web-dashboard-server",
-  "version": "0.6.0-alpha",
+  "version": "0.7.0-alpha",
   "private": true,
   "type": "module",
   "engines": {

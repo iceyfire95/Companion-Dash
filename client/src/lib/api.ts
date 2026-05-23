@@ -26,6 +26,39 @@ export const api = {
   deleteDashboard: (id: string) => j<void>(`/api/dashboards/${id}`, { method: 'DELETE' }),
   listPanels: (id: string) => j<Panel[]>(`/api/dashboards/${id}/panels`),
 
+  /**
+   * Upload a PNG or JPEG as the dashboard's background image. The body
+   * is the raw bytes; we set the Content-Type header to the file's MIME
+   * type so the server can validate. Server enforces an 8 MB cap and a
+   * PNG/JPEG-only allowlist.
+   */
+  uploadDashboardBackground: async (id: string, file: File): Promise<Dashboard> => {
+    const r = await fetch(`/api/dashboards/${id}/background`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type },
+      body: file
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      throw new Error(`${r.status}: ${text || r.statusText}`);
+    }
+    return r.json() as Promise<Dashboard>;
+  },
+  removeDashboardBackground: (id: string) =>
+    j<Dashboard>(`/api/dashboards/${id}/background`, { method: 'DELETE' }),
+  setDashboardBackgroundFit: (id: string, fit: 'cover' | 'contain' | 'stretch') =>
+    j<Dashboard>(`/api/dashboards/${id}/background-fit`, {
+      method: 'PUT',
+      body: JSON.stringify({ fit })
+    }),
+  /**
+   * Returns the URL to GET the background image bytes, with a cache-
+   * buster keyed on the dashboard's updatedAt so a fresh upload always
+   * forces a reload in the browser. Useful as an <img src>.
+   */
+  dashboardBackgroundUrl: (id: string, updatedAt: number) =>
+    `/api/dashboards/${id}/background?v=${updatedAt}`,
+
   // Panels
   createPanel: (data: { dashboardId: string; templateId?: string; x?: number; y?: number }) =>
     j<Panel>('/api/panels', { method: 'POST', body: JSON.stringify(data) }),
