@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { Dashboard } from '../types';
+import { AuthBar, useCanEdit } from '../components/AuthBar';
 
 export function HomePage() {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [name, setName] = useState('');
+  const canEdit = useCanEdit();
 
   async function load() {
     setDashboards(await api.listDashboards());
@@ -33,18 +35,22 @@ export function HomePage() {
         <Link to="/tally"><button>Tally</button></Link>
         <Link to="/variables"><button>Variables</button></Link>
         <Link to="/settings"><button>Settings</button></Link>
+        <AuthBar />
       </div>
       <div style={{ padding: 20, maxWidth: 800, margin: '0 auto', width: '100%' }}>
         <h2>Dashboards</h2>
-        <div className="list-row">
-          <input
-            placeholder="New dashboard name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <button className="primary" onClick={create}>Create</button>
-        </div>
+        {/* Create input is editor-only - hides entirely when locked. */}
+        {canEdit && (
+          <div className="list-row">
+            <input
+              placeholder="New dashboard name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button className="primary" onClick={create}>Create</button>
+          </div>
+        )}
         <div style={{ marginTop: 16 }}>
           {dashboards.length === 0 && (
             <div style={{ color: '#888', padding: 12 }}>No dashboards yet.</div>
@@ -58,8 +64,12 @@ export function HomePage() {
                 </div>
               </div>
               <Link to={`/view/${d.id}`}><button>View</button></Link>
-              <Link to={`/edit/${d.id}`}><button className="primary">Edit</button></Link>
-              <button className="danger" onClick={() => remove(d.id)}>Delete</button>
+              {canEdit && (
+                <>
+                  <Link to={`/edit/${d.id}`}><button className="primary">Edit</button></Link>
+                  <button className="danger" onClick={() => remove(d.id)}>Delete</button>
+                </>
+              )}
             </div>
           ))}
         </div>

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type PollerStatus, type WatchedVariable } from '../lib/api';
 import { useVariableValues } from '../lib/useVariableValues';
+import { AuthBar, useCanEdit } from '../components/AuthBar';
 
 export function VariablesPage() {
   const liveValues = useVariableValues();
+  const canEdit = useCanEdit();
   const [restValues, setRestValues] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<PollerStatus | null>(null);
   const [watched, setWatched] = useState<WatchedVariable[]>([]);
@@ -133,10 +135,12 @@ export function VariablesPage() {
               : 'Not connected'}
           </span>
         )}
+        <AuthBar />
       </div>
 
       <div style={{ padding: 20, maxWidth: 900, margin: '0 auto', width: '100%' }}>
-        {/* Add to watch list */}
+        {/* Add to watch list - editor-only */}
+        {canEdit && (
         <div style={{
           background: '#141414', border: '1px solid #2a2a2a', borderRadius: 6,
           padding: 14, marginBottom: 16
@@ -187,6 +191,7 @@ export function VariablesPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Filter */}
         <input
@@ -262,7 +267,7 @@ export function VariablesPage() {
                   </div>
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                     <button onClick={() => copy(`$(${r.name})`)} style={{ padding: '3px 8px', fontSize: 11 }}>Copy</button>
-                    {isWatched && (
+                    {isWatched && canEdit && (
                       <button
                         className="danger"
                         onClick={() => doRemove(watchedById.get(r.name)!.id)}

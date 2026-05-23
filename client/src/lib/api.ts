@@ -4,12 +4,36 @@ import type {
 import type {
   TallySource, AutoPopulateRequest, AutoPopulateResult
 } from './tally';
+import { openLoginModal, refreshAuthStatus } from './auth';
 
-async function j<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+/**
+ * Core API fetch wrapper.
+ *
+ * On 401, asks the auth layer to open the login modal and waits for
+ * the user to either log in (resolved with true) or dismiss (false).
+ * If they log in, we retry the original request exactly once - that
+ * covers "I hit Save, got popped, logged in, save now works" without
+ * any retry logic in the calling component.
+ *
+ * `credentials: 'same-origin'` is essential so the HTTP-only session
+ * cookie ships on every API call.
+ */
+async function j<T>(
+  input: RequestInfo, init?: RequestInit, _retry = false
+): Promise<T> {
   const r = await fetch(input, {
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     ...init
   });
+  if (r.status === 401 && !_retry) {
+    // Refresh status so the UI also sees "not authenticated" - then
+    // pop the modal and wait. If user logs in, retry once.
+    void refreshAuthStatus();
+    const ok = await openLoginModal();
+    if (ok) return j<T>(input, init, true);
+    throw new Error('Authentication required');
+  }
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   if (r.status === 204) return undefined as unknown as T;
   return r.json() as Promise<T>;
@@ -32,18 +56,25 @@ export const api = {
    * type so the server can validate. Server enforces an 8 MB cap and a
    * PNG/JPEG-only allowlist.
    */
-  uploadDashboardBackground: async (id: string, file: File): Promise<Dashboard> => {
+  uploadDashboardBackground: (async function upload(id: string, file: File, _retry = false): Promise<Dashboard> {
     const r = await fetch(`/api/dashboards/${id}/background`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': file.type },
       body: file
     });
+    if (r.status === 401 && !_retry) {
+      void refreshAuthStatus();
+      const ok = await openLoginModal();
+      if (ok) return upload(id, file, true);
+      throw new Error('Authentication required');
+    }
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       throw new Error(`${r.status}: ${text || r.statusText}`);
     }
     return r.json() as Promise<Dashboard>;
-  },
+  }),
   removeDashboardBackground: (id: string) =>
     j<Dashboard>(`/api/dashboards/${id}/background`, { method: 'DELETE' }),
   setDashboardBackgroundFit: (id: string, fit: 'cover' | 'contain' | 'stretch') =>

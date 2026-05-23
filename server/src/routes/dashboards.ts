@@ -7,6 +7,7 @@ import {
   type BackgroundFit
 } from '../db/backgrounds.js';
 import { newId } from '../types.js';
+import { requireAuth } from '../services/requireAuth.js';
 import type { Dashboard } from '../types.js';
 
 const r = Router();
@@ -15,7 +16,7 @@ r.get('/', (_req, res) => {
   res.json(db.listDashboards());
 });
 
-r.post('/', (req, res) => {
+r.post('/', requireAuth, (req, res) => {
   const now = Date.now();
   const d: Dashboard = {
     id: newId(),
@@ -38,7 +39,7 @@ r.get('/:id', (req, res) => {
   res.json(d);
 });
 
-r.put('/:id', (req, res) => {
+r.put('/:id', requireAuth, (req, res) => {
   const existing = db.getDashboard(req.params.id);
   if (!existing) { res.status(404).json({ error: 'not found' }); return; }
   // Validate backgroundFit if provided.
@@ -65,7 +66,7 @@ r.put('/:id', (req, res) => {
   res.json(db.getDashboard(d.id) ?? d);
 });
 
-r.delete('/:id', (req, res) => {
+r.delete('/:id', requireAuth, (req, res) => {
   db.deleteDashboard(req.params.id);
   res.status(204).end();
 });
@@ -92,6 +93,7 @@ r.get('/:id/panels', (req, res) => {
  */
 r.post(
   '/:id/background',
+  requireAuth,
   raw({
     type: () => true,
     limit: MAX_BACKGROUND_BYTES
@@ -141,7 +143,7 @@ r.get('/:id/background', (req, res) => {
   res.status(200).end(Buffer.from(row.data));
 });
 
-r.delete('/:id/background', (req, res) => {
+r.delete('/:id/background', requireAuth, (req, res) => {
   if (!hasBackground(req.params.id)) {
     res.status(404).json({ error: 'no background to remove' });
     return;
@@ -154,7 +156,7 @@ r.delete('/:id/background', (req, res) => {
  * Update just the fit mode without re-uploading the image. Useful for
  * the inspector's dropdown which should be light/instant.
  */
-r.put('/:id/background-fit', (req, res) => {
+r.put('/:id/background-fit', requireAuth, (req, res) => {
   const existing = db.getDashboard(req.params.id);
   if (!existing) { res.status(404).json({ error: 'not found' }); return; }
   const v = String(req.body?.fit);

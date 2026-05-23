@@ -7,9 +7,11 @@ import {
 } from '../lib/tally';
 import { VarAutocompleteInput, refreshVariableSuggestions } from '../lib/autocomplete';
 import { AutoPopulateWizard } from './AutoPopulateWizard';
+import { AuthBar, useCanEdit } from '../components/AuthBar';
 
 export function TallyHubPage() {
   const liveValues = useVariableValues();
+  const canEdit = useCanEdit();
   const [restValues, setRestValues] = useState<Record<string, string>>({});
   const [sources, setSources] = useState<TallySource[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,6 +100,7 @@ export function TallyHubPage() {
         <div className="spacer" />
         <Link to="/variables"><button>Variables</button></Link>
         <Link to="/settings"><button>Settings</button></Link>
+        <AuthBar />
       </div>
 
       <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
@@ -123,7 +126,7 @@ export function TallyHubPage() {
           configure one manually.
         </div>
 
-        {!editorOpen && (
+        {!editorOpen && canEdit && (
           <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
             <button className="primary" onClick={startNew}>+ Add tally source</button>
             <button onClick={() => setShowWizard(true)}>⚡ Auto-populate from connection</button>
@@ -172,6 +175,7 @@ export function TallyHubPage() {
                 onEdit={() => startEdit(s)}
                 onRemove={() => remove(s.id)}
                 disabled={editorOpen}
+                canEdit={canEdit}
               />
             ))}
           </div>
@@ -184,13 +188,14 @@ export function TallyHubPage() {
 // -------------------------------------------------------------------------
 
 function TallyTile({
-  source, values, onEdit, onRemove, disabled
+  source, values, onEdit, onRemove, disabled, canEdit
 }: {
   source: TallySource;
   values: Record<string, string>;
   onEdit: () => void;
   onRemove: () => void;
   disabled: boolean;
+  canEdit: boolean;
 }) {
   const state = tallyState(values, source);
   const bg = tallyColor(state);
@@ -256,10 +261,14 @@ function TallyTile({
               Open ↗
             </button>
           </Link>
-          <button onClick={onEdit} disabled={disabled}
-                  style={{ padding: '3px 10px', fontSize: 11 }}>Edit</button>
-          <button onClick={onRemove} disabled={disabled} className="danger"
-                  style={{ padding: '3px 10px', fontSize: 11 }}>Delete</button>
+          {canEdit && (
+            <>
+              <button onClick={onEdit} disabled={disabled}
+                      style={{ padding: '3px 10px', fontSize: 11 }}>Edit</button>
+              <button onClick={onRemove} disabled={disabled} className="danger"
+                      style={{ padding: '3px 10px', fontSize: 11 }}>Delete</button>
+            </>
+          )}
         </div>
       </div>
     </div>

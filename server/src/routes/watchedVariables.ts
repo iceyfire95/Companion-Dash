@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as db from '../db/index.js';
 import { rebuildWantedVariables } from '../services/orchestrator.js';
+import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
 
@@ -8,7 +9,7 @@ r.get('/', (_req, res) => {
   res.json(db.listWatchedVariables());
 });
 
-r.post('/', (req, res) => {
+r.post('/', requireAuth, (req, res) => {
   // Body: { name: string } OR { names: string[] | string }
   // Single OR bulk in one endpoint for convenience.
   const single = typeof req.body?.name === 'string' ? req.body.name : null;
@@ -32,7 +33,7 @@ r.post('/', (req, res) => {
   }
 });
 
-r.delete('/:id', (req, res) => {
+r.delete('/:id', requireAuth, (req, res) => {
   db.removeWatchedVariable(req.params.id);
   rebuildWantedVariables();
   res.status(204).end();

@@ -2,12 +2,13 @@ import { Router } from 'express';
 import * as db from '../db/index.js';
 import { newId } from '../types.js';
 import type { SavedPanelTemplate, Panel } from '../types.js';
+import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
 
 r.get('/', (_req, res) => res.json(db.listSavedPanels()));
 
-r.post('/', (req, res) => {
+r.post('/', requireAuth, (req, res) => {
   const sourcePanelId = String(req.body?.panelId ?? '');
   const name = String(req.body?.name ?? 'Untitled template');
   const src = db.getPanel(sourcePanelId);
@@ -23,7 +24,7 @@ r.post('/', (req, res) => {
   res.status(201).json(tpl);
 });
 
-r.delete('/:id', (req, res) => {
+r.delete('/:id', requireAuth, (req, res) => {
   db.deleteSavedPanel(req.params.id);
   res.status(204).end();
 });

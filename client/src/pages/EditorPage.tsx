@@ -7,6 +7,7 @@ import type { Dashboard, Panel, SavedPanelTemplate } from '../types';
 import { PanelView } from '../components/PanelView';
 import { Inspector } from '../components/Inspector';
 import { DashboardBackground } from '../lib/DashboardBackground';
+import { AuthBar } from '../components/AuthBar';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -182,6 +183,7 @@ export function EditorPage() {
         <Link to={`/view/${dashboardId}`} target="_blank">
           <button>Open viewer ↗</button>
         </Link>
+        <AuthBar />
       </div>
 
       <div className="editor-layout">

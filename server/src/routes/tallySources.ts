@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as tdb from '../db/tally.js';
 import { rebuildWantedVariables } from '../services/orchestrator.js';
 import { autoPopulate, type AutoPopulateRequest } from '../services/tallyAutoPopulate.js';
+import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
 
@@ -20,7 +21,7 @@ r.get('/by-slug/:slug', (req, res) => {
  * Probes companion for input labels; returns the proposed rows WITHOUT
  * saving them. UI shows this as a list with checkboxes / edit-name.
  */
-r.post('/auto-populate/preview', async (req, res) => {
+r.post('/auto-populate/preview', requireAuth, async (req, res) => {
   try {
     const body = req.body ?? {};
     const proposalReq: AutoPopulateRequest = {
@@ -46,7 +47,7 @@ r.post('/auto-populate/preview', async (req, res) => {
  * them. Each row is treated as a brand-new TallySource - we regenerate
  * id + slug, so slug collisions auto-suffix.
  */
-r.post('/bulk', (req, res) => {
+r.post('/bulk', requireAuth, (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : null;
     if (!items) {
@@ -67,7 +68,7 @@ r.get('/:id', (req, res) => {
   res.json(row);
 });
 
-r.post('/', (req, res) => {
+r.post('/', requireAuth, (req, res) => {
   try {
     const s = tdb.newTallySource(req.body ?? {});
     tdb.insertTallySource(s);
@@ -78,7 +79,7 @@ r.post('/', (req, res) => {
   }
 });
 
-r.put('/:id', (req, res) => {
+r.put('/:id', requireAuth, (req, res) => {
   const existing = tdb.getTallySource(req.params.id);
   if (!existing) { res.status(404).json({ error: 'not found' }); return; }
   const body = req.body ?? {};
@@ -111,7 +112,7 @@ r.put('/:id', (req, res) => {
   }
 });
 
-r.delete('/:id', (req, res) => {
+r.delete('/:id', requireAuth, (req, res) => {
   tdb.deleteTallySource(req.params.id);
   rebuildWantedVariables();
   res.status(204).end();

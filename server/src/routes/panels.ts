@@ -4,6 +4,7 @@ import { newId } from '../types.js';
 import type { Panel, Cell } from '../types.js';
 import { rebuildWantedVariables } from '../services/orchestrator.js';
 import { clearToggleState } from '../services/buttons.js';
+import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
 
@@ -55,7 +56,7 @@ function defaultPanel(dashboardId: string): Panel {
   };
 }
 
-r.post('/', (req, res) => {
+r.post('/', requireAuth, (req, res) => {
   const dashboardId = String(req.body?.dashboardId ?? '');
   if (!dashboardId || !db.getDashboard(dashboardId)) {
     res.status(400).json({ error: 'dashboardId invalid' });
@@ -91,7 +92,7 @@ r.get('/:id', (req, res) => {
   res.json(p);
 });
 
-r.put('/:id', (req, res) => {
+r.put('/:id', requireAuth, (req, res) => {
   const existing = db.getPanel(req.params.id);
   if (!existing) { res.status(404).json({ error: 'not found' }); return; }
   const incoming = req.body as Partial<Panel>;
@@ -104,7 +105,7 @@ r.put('/:id', (req, res) => {
   res.json(p);
 });
 
-r.delete('/:id', (req, res) => {
+r.delete('/:id', requireAuth, (req, res) => {
   const p = db.getPanel(req.params.id);
   db.deletePanel(req.params.id);
   clearToggleState(req.params.id);

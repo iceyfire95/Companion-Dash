@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as db from '../db/index.js';
 import { triggerButton, fireCompanionAction, getToggleStep, clearToggleState } from '../services/buttons.js';
 import type { ButtonAction } from '../types.js';
+import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
 
@@ -37,7 +38,7 @@ r.post('/trigger', async (req, res) => {
 });
 
 /** Editor test fire - sends a one-off action without touching toggle state. */
-r.post('/test', async (req, res) => {
+r.post('/test', requireAuth, async (req, res) => {
   const a = req.body?.action as ButtonAction | undefined;
   if (!a || typeof a.page !== 'number' || typeof a.row !== 'number' || typeof a.column !== 'number') {
     res.status(400).json({ ok: false, error: 'action requires page, row, column numbers' });
@@ -54,7 +55,7 @@ r.get('/state/:panelId/:cellId?', (req, res) => {
 });
 
 /** Reset toggle step state (useful when reconfiguring). */
-r.post('/reset', (req, res) => {
+r.post('/reset', requireAuth, (req, res) => {
   const panelId = String(req.body?.panelId ?? '');
   const cellId = req.body?.cellId === undefined ? undefined
                 : req.body.cellId === null ? null : String(req.body.cellId);

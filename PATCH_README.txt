@@ -1,98 +1,137 @@
-Companion-Dash v0.7.0-alpha — Background images + panel alignment
-==================================================================
+Companion-Dash v0.8.0-alpha — PIN-based editor lock
+====================================================
 
 Apply: from repo root, extract this tar.gz, accept overwrites.
 
     cd ~/Documents/git/companion-web-dashboard
-    tar -xzvf companion-dash-v0.7.0-bg-align.tar.gz
+    tar -xzvf companion-dash-v0.8.0-auth.tar.gz
 
-Prerequisite: v0.6.0-alpha (this patch builds on that base).
+Prerequisite: v0.7.0-alpha (this patch builds on that base).
 
 No new npm dependencies. SQLite migration runs automatically on first
-server boot — adds `background_fit` column to dashboards table and
-creates `dashboard_backgrounds` table. Existing dashboards keep
-working unchanged.
+server boot — adds `auth_settings` (1-row config) and `sessions`
+tables. Existing dashboards / panels / tally sources keep working
+unchanged. **Auth defaults to OFF**: dashboard behaves exactly like
+v0.7 until you opt in via Settings.
 
 What's new
 ----------
 
-1. **Background images.** Upload a PNG or JPEG as the canvas
-   background, per dashboard. Image sits at design coordinates
-   (i.e. behind your panels in the same 1920×1080 design space) and
-   scales lockstep with the canvas as the viewer / editor zooms or
-   resizes.
+**4-digit PIN gate for editing.**
 
-   Three fit modes:
-   - **Cover** — image fills the canvas, edges may be cropped
-   - **Contain** — image fits inside the canvas, letterbox if needed
-   - **Stretch** — image is distorted to exact canvas dimensions
+* Viewer pages (`/view/:id`, `/tally`, `/tally/:slug`) and tally
+  status are ALWAYS public — never require a PIN.
+* Editing requires a PIN once you enable the lock: creating /
+  modifying / deleting dashboards, panels, tally sources, watched
+  variables, saved templates, Companion connection settings, and
+  PIN-test button presses from the inspector.
+* Viewer button presses (`POST /api/buttons/trigger`) are NOT
+  gated — viewers still fire Companion buttons normally.
+* `GET /api/settings/companion` is also gated (host+port shouldn't
+  leak to unauth'd viewers); other GETs remain public.
 
-   Image stored in SQLite as a blob (so backups are still one file).
-   Hard cap: 8MB. Served with proper Cache-Control + ETag headers so
-   the browser caches across navigations but always sees fresh uploads.
+**Security choices.**
 
-   Controls live in the Inspector's new "Dashboard" section at the
-   top — works whether a panel is selected or not.
+* PIN stored as scrypt hash + 16-byte random salt. We never store
+  the PIN itself.
+* Sessions: 32-byte random token, HTTP-only cookie, SameSite=Strict,
+  24-hour ABSOLUTE expiry (no sliding renewal). HttpOnly means JS
+  can't read the cookie even if the page is XSS'd; SameSite=Strict
+  blocks CSRF.
+* The Secure cookie flag is OFF by default (so plain-HTTP LAN setups
+  work). Behind a reverse proxy with TLS, set
+  `CWD_REQUIRE_HTTPS=1` in the server env to flip it on.
+* Brute-force defense: 5 wrong attempts per IP triggers a 5-minute
+  lockout — even the correct PIN gets a 429 during the window.
+* PIN format is strict 4 ASCII digits, validated client-side
+  (numeric input mode for soft-keyboard) and server-side.
 
-2. **Panel alignment buttons.** Six new buttons in the Inspector's
-   panel section, just below W/H:
-   - Align H: left edge ⇤ / horizontal center ⇔ / right edge ⇥
-   - Align V: top edge ⤒ / vertical center ⇕ / bottom edge ⤓
+**UX.**
 
-   Each aligns the selected panel canvas-relative — the math is just
-   `x = (canvasWidth - panelWidth) / 2` for centering, edge alignments
-   are obvious. Clamped to 0 so panels can't be pushed off-canvas
-   if the dashboard was resized smaller than the panel.
+* When auth is enabled and you're not logged in:
+  - all editing buttons / inputs are hidden (Create / Edit / Delete
+    / + Add tally source / Auto-populate / etc.)
+  - viewer-only UI (View buttons, Open ↗ tally links, tally tiles,
+    variable list) stays visible
+  - top-right of every page shows a `🔓 Log in` button
+  - direct navigation to `/edit/:id` redirects to `/view/:id` so a
+    stripped-down editor never appears
+* When logged in: top-right shows `🔒 Log out`. Mutations work as
+  before.
+* If you hit a 401 during an action (e.g. session expired
+  mid-edit), the login modal pops up automatically and the action
+  retries after successful PIN entry. No work lost.
+* Login modal: numeric-only 4-digit input with countdown when
+  rate-limit hit. Dismissable via Escape / outside-click / Cancel
+  button.
 
-   Multi-panel distribute / align-to-each-other is NOT in this
-   release — that needs multi-select first. Easy follow-up if you
-   want it.
+**Setup flow.**
 
-Files added
------------
-  server/src/db/backgrounds.ts         (blob storage + fit mode)
-  client/src/lib/DashboardBackground.tsx (shared canvas image component)
+1. Go to Settings → Authentication section
+2. Click "Enable PIN lock", enter 4-digit PIN twice, click Save
+3. PIN lock is now ON. Your current session stays logged in for 24h
+4. Other devices / new tabs will need to log in to edit
 
-Files modified
---------------
-  server/src/types.ts                  (Dashboard.backgroundFit / hasBackground)
-  server/src/db/index.ts               (include backgroundFit in reads, migration)
-  server/src/routes/dashboards.ts      (upload / fetch / delete / fit endpoints)
-  server/src/index.ts                  (init backgrounds db)
-  client/src/types.ts                  (Dashboard interface mirror)
-  client/src/lib/api.ts                (background API methods)
-  client/src/components/Inspector.tsx  (Dashboard section + AlignButtons)
-  client/src/pages/EditorPage.tsx      (render bg + pass dashboard to Inspector)
-  client/src/pages/ViewerPage.tsx      (render bg)
-  package.json + 3 sub-package.json    (version → 0.7.0-alpha)
+**Files added.**
 
-New endpoints
--------------
-  POST   /api/dashboards/:id/background       (upload raw image bytes)
-  GET    /api/dashboards/:id/background       (fetch image bytes, with ETag)
-  DELETE /api/dashboards/:id/background       (clear)
-  PUT    /api/dashboards/:id/background-fit   (body: {fit: cover|contain|stretch})
+  server/src/db/auth.ts
+  server/src/services/loginAttempts.ts
+  server/src/services/requireAuth.ts
+  server/src/routes/auth.ts
+  client/src/lib/auth.ts
+  client/src/components/AuthBar.tsx
 
-The PUT /api/dashboards/:id endpoint also now accepts backgroundFit in
-its body alongside the existing name/width/height/bgColor fields.
+**Files modified.**
 
-Smoke tested
-------------
-- upload PNG → bytes survive a fetch round-trip byte-for-byte
-- fit-mode change persists and is returned in dashboard JSON
-- SVG rejected (415 with helpful error)
-- invalid fit rejected (400)
-- delete background → hasBackground:false, fit preserved
-- delete dashboard → bg row cascades cleanly (FOREIGN KEY ON DELETE CASCADE)
-- migration from a pre-v0.7 dashboards table → ALTER TABLE adds
-  background_fit, existing rows preserved with default 'cover'
-- align math: 200x100 panel in 1920x1080 → centered = (860, 490);
-  right+bottom = (1720, 980)
+  server/src/index.ts                            (init + mount)
+  server/src/routes/dashboards.ts                (gate POST/PUT/DELETE + bg routes)
+  server/src/routes/panels.ts                    (gate POST/PUT/DELETE)
+  server/src/routes/savedPanels.ts               (gate POST/DELETE)
+  server/src/routes/settings.ts                  (gate /companion GET+PUT, /variable-names GET)
+  server/src/routes/watchedVariables.ts          (gate POST/DELETE)
+  server/src/routes/tallySources.ts              (gate POST/PUT/DELETE + auto-populate)
+  server/src/routes/buttons.ts                   (gate /test, /reset; /trigger stays public)
+  client/src/main.tsx                            (LoginModal mount + edit gate)
+  client/src/lib/api.ts                          (401 retry + credentials: same-origin)
+  client/src/pages/HomePage.tsx                  (hide create/edit/delete when locked)
+  client/src/pages/SettingsPage.tsx              (Authentication section + lock UI)
+  client/src/pages/VariablesPage.tsx             (hide add/remove when locked)
+  client/src/pages/TallyHubPage.tsx              (hide add/wizard/edit/delete when locked)
+  client/src/pages/EditorPage.tsx                (AuthBar in toolbar)
+  4 × package.json                               (0.7.0 → 0.8.0-alpha)
 
-Known gaps (not blockers)
--------------------------
-- CONTEXT.md not updated.
-- No multi-panel selection yet, so no distribute / align-to-each-other
-  buttons. Canvas-relative align only.
-- No image preview thumbnail in the Inspector — too easy to bloat the
-  sidebar; you see the live background in the canvas anyway.
+**New endpoints.**
+
+  GET    /api/auth/status      always callable - {enabled, authenticated, hasPin}
+  POST   /api/auth/setup       set/change PIN (authed if currently enabled)
+  POST   /api/auth/login       body {pin} - sets cookie on success
+  POST   /api/auth/logout      clears cookie + revokes session
+  POST   /api/auth/disable     authed only - wipes PIN + all sessions
+
+**Tested.**
+
+  - Fresh DB → auth off → mutations succeed
+  - Setup PIN → mutations 401 without cookie
+  - GET /dashboards stays 200 (public)
+  - GET /settings/companion → 401 (gated read)
+  - GET /settings/values → 200 (viewer needs this)
+  - Wrong PIN → remaining counter, blocked=false until 5th attempt
+  - 5th wrong PIN → blocked=true, retryInMs=300000
+  - 6th attempt (incl. correct PIN) → 429 "too many failed attempts"
+  - Correct PIN → 200, Set-Cookie with HttpOnly, SameSite=Strict,
+    Max-Age=86400, no Secure (CWD_REQUIRE_HTTPS not set)
+  - Authed mutation → 201
+  - Logout → next mutation 401 again
+  - Migration from a v0.7 DB → tables created, defaults sane,
+    existing rows preserved
+
+**Known gaps (not blockers).**
+
+  - CONTEXT.md not updated.
+  - No "remember me" / extended session option - by design.
+  - No "reset PIN if forgotten" flow. To reset, delete the
+    auth_settings row from the SQLite DB on the server. Documenting
+    this in README would be a good follow-up.
+  - Single-role: there's no admin/viewer distinction beyond "has the
+    PIN or doesn't". A future iteration could add per-route
+    granularity if needed.
