@@ -56,7 +56,10 @@ export function SettingsPage() {
         )}
         <AuthBar />
       </div>
-      <div style={{ padding: 20, maxWidth: 600 }}>
+      <div style={{
+        padding: 20, maxWidth: 600,
+        flex: 1, overflow: 'auto', minHeight: 0
+      }}>
         <h2>Bitfocus Companion</h2>
         <p style={{ color: '#888', fontSize: 13 }}>
           The server polls Companion's HTTP API for variable values.

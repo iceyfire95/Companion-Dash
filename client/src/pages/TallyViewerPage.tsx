@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useVariableValues } from '../lib/useVariableValues';
 import {
-  type TallySource, tallyState, tallyColor
+  type TallySource, tallyState, tallyColor, activeMatches
 } from '../lib/tally';
 import { useAutoFit } from '../lib/useAutoFit';
 
@@ -83,6 +83,12 @@ export function TallyViewerPage() {
   // While loading, body is already black (off). Don't render label until known.
   if (!source) return null;
 
+  // Live destination summary - only meaningful when state != off AND
+  // the source is in inList mode. Operators standing next to the
+  // camera see "Cam 1" big + "on: LED, FB 1" small underneath.
+  const activeList = activeMatches(values, source, state);
+  const matchSummary = activeList.join(', ');
+
   return (
     <div style={{
       position: 'fixed',
@@ -90,7 +96,16 @@ export function TallyViewerPage() {
       backgroundColor: bg,
       transition: 'background-color 50ms linear'
     }}>
-      {source.showLabel && <FittedLabel text={source.name} state={state} />}
+      {source.showLabel && (
+        <FittedLabel
+          text={source.name}
+          state={state}
+          hasFooter={matchSummary.length > 0}
+        />
+      )}
+      {matchSummary && (
+        <MatchedFooter text={matchSummary} state={state} />
+      )}
     </div>
   );
 }
@@ -101,21 +116,35 @@ export function TallyViewerPage() {
 // hard-coded to a px size.
 
 function FittedLabel({
-  text, state
+  text, state, hasFooter
 }: {
   text: string;
-  state: 'pgm' | 'pvw' | 'off';
+  state: 'pgm' | 'aux' | 'pvw' | 'off';
+  hasFooter: boolean;
 }) {
-  // Text colour: white on red/green for contrast; mid-gray on black (so the
-  // label is visible but doesn't fight the "off" signal).
-  const color = state === 'off' ? '#444' : '#ffffff';
-  const { outerRef, innerRef } = useAutoFit(24, [text]);
+  // Text colour:
+  //   off → dark grey (visible without fighting the "off" signal)
+  //   aux (yellow) → near-black for contrast against bright yellow
+  //   pgm/pvw → white
+  const color =
+    state === 'off' ? '#444' :
+    state === 'aux' ? '#0a0a0a' :
+                       '#ffffff';
+  // When the matched-destinations footer is showing, leave extra
+  // space at the bottom (~18vmin) so the autofit doesn't size the
+  // name into the footer's territory. The 5vmin breathing-room on
+  // the other sides is unchanged.
+  const bottom = hasFooter ? '18vmin' : '5vmin';
+  const { outerRef, innerRef } = useAutoFit(24, [text, hasFooter]);
   return (
     <div
       ref={outerRef}
       style={{
         position: 'absolute',
-        inset: '5vmin',                // small breathing room from edges
+        top: '5vmin',
+        left: '5vmin',
+        right: '5vmin',
+        bottom,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -140,6 +169,47 @@ function FittedLabel({
       >
         {text}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bottom strip showing which tracked destinations the source is
+ * currently live at. Sized to be visible at distance without
+ * competing with the big source name. White on red/green, hidden
+ * entirely when off (no matchSummary).
+ */
+function MatchedFooter({
+  text, state
+}: {
+  text: string;
+  state: 'pgm' | 'aux' | 'pvw' | 'off';
+}) {
+  if (state === 'off') return null;
+  // Dark text on yellow (aux), white on red/green.
+  const color = state === 'aux' ? '#0a0a0a' : '#ffffff';
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '4vmin',
+      left: '5vmin',
+      right: '5vmin',
+      textAlign: 'center',
+      color,
+      opacity: state === 'aux' ? 0.9 : 0.85,
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      // Roughly 6% of the smaller viewport dimension - readable from
+      // ~2m away on a tablet without dominating the tally light.
+      fontSize: '6vmin',
+      fontWeight: 600,
+      letterSpacing: '0.02em',
+      lineHeight: 1.1,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      pointerEvents: 'none'
+    }}>
+      on: {text}
     </div>
   );
 }

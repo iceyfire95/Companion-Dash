@@ -86,9 +86,15 @@ export class CompanionPoller extends EventEmitter {
     const next = new Set<string>();
     for (const v of vars) if (v) next.add(v);
     this.wanted = next;
-    // Drop cached values for variables no longer wanted
+    // Drop cached values for variables no longer wanted, AND tell
+    // listeners so socket clients can purge them from their local
+    // state. Without this event the Variables page in the browser
+    // accumulates stale rows from previous shows / deleted panels.
     for (const k of [...this.values.keys()]) {
-      if (!next.has(k)) this.values.delete(k);
+      if (!next.has(k)) {
+        this.values.delete(k);
+        this.emit('drop', { id: k });
+      }
     }
   }
 

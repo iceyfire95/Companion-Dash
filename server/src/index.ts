@@ -68,6 +68,15 @@ poller.on('change', ({ id, value }: { id: string; value: string }) => {
   io.emit('values:update', { id, value });
 });
 
+// When a variable leaves the wanted set (last referencing panel /
+// watched-variable / tally source got removed), poller drops it from
+// its cache and fires 'drop'. We forward to clients so they can
+// purge their local state - otherwise the Variables page in the
+// browser balloons with stale values from previous shows.
+poller.on('drop', ({ id }: { id: string }) => {
+  io.emit('values:delete', { id });
+});
+
 // Bootstrap
 rebuildWantedVariables();
 poller.start();

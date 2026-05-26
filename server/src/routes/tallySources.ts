@@ -1,10 +1,18 @@
 import { Router } from 'express';
 import * as tdb from '../db/tally.js';
 import { rebuildWantedVariables } from '../services/orchestrator.js';
-import { autoPopulate, type AutoPopulateRequest } from '../services/tallyAutoPopulate.js';
+import {
+  autoPopulate, probeEventMasterDestinations, type AutoPopulateRequest
+} from '../services/tallyAutoPopulate.js';
 import { requireAuth } from '../services/requireAuth.js';
 
 const r = Router();
+
+/** Coerce caller-supplied match-mode to the allowed enum, or undefined. */
+function validateMode(v: any): 'truthy' | 'equals' | 'inList' | undefined {
+  if (v === 'truthy' || v === 'equals' || v === 'inList') return v;
+  return undefined;
+}
 
 r.get('/', (_req, res) => {
   res.json(tdb.listTallySources());
@@ -33,10 +41,40 @@ r.post('/auto-populate/preview', requireAuth, async (req, res) => {
       tslPgmBit: body.tslPgmBit,
       vmixMix: body.vmixMix,
       atemME: body.atemME,
-      atemStartInput: body.atemStartInput
+      atemStartInput: body.atemStartInput,
+      // Event Master: list of destination names to OR-match against
+      // source_<N>_pgm_destinations / _pvw_destinations. Provided as an
+      // array from the wizard; collapsed to comma-list by the service.
+      emDestinations: Array.isArray(body.emDestinations) ? body.emDestinations : undefined
     };
     const result = await autoPopulate(proposalReq);
     res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+/**
+ * Event Master destination discovery.
+ *
+ * The auto-populate wizard for EM needs to show the user a checklist
+ * of destination names so they can pick which ones to track. This
+ * route probes the connection for screen + aux destination names and
+ * returns whatever it found, deduped and sorted alphabetically.
+ *
+ * Body: { connection: string, screenCount?: number, auxCount?: number }
+ *   Defaults: scan screens 1..32 and aux 1..32. Anything with an empty
+ *   _name variable is omitted.
+ */
+r.post('/auto-populate/em-destinations', requireAuth, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const connection = String(body.connection ?? '').trim();
+    if (!connection) { res.status(400).json({ error: 'connection is required' }); return; }
+    const screenCount = Number(body.screenCount ?? 256);
+    const auxCount = Number(body.auxCount ?? 256);
+    const out = await probeEventMasterDestinations(connection, screenCount, auxCount);
+    res.json(out);
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }
@@ -100,6 +138,10 @@ r.put('/:id', requireAuth, (req, res) => {
       ? body.pvwMatchValue : (existing.pvwMatchValue ?? ''),
     pgmMatchValue: typeof body.pgmMatchValue === 'string'
       ? body.pgmMatchValue : (existing.pgmMatchValue ?? ''),
+    // Match mode: 'truthy' | 'equals' | 'inList'. Any other value
+    // collapses to undefined (server derives at read time).
+    pvwMatchMode: validateMode(body.pvwMatchMode) ?? existing.pvwMatchMode,
+    pgmMatchMode: validateMode(body.pgmMatchMode) ?? existing.pgmMatchMode,
     showLabel: typeof body.showLabel === 'boolean' ? body.showLabel : existing.showLabel,
     updatedAt: Date.now()
   };

@@ -37,6 +37,20 @@ export function initTallyDb(db: DatabaseSync): void {
   if (!hasCol('pgm_match_value')) {
     db.exec(`ALTER TABLE tally_sources ADD COLUMN pgm_match_value TEXT NOT NULL DEFAULT ''`);
   }
+  // v0.9.0: add explicit match-mode columns for Event Master 'inList'
+  // semantics. Existing rows have NULL/empty → server derives the mode
+  // from the matchValue field at read time (empty → 'truthy',
+  // non-empty → 'equals'). Only 'inList' is persisted explicitly.
+  // We re-query table_info because the ALTER TABLE statements above
+  // may have just added columns.
+  const cols2 = db.prepare(`PRAGMA table_info(tally_sources)`).all() as any[];
+  const hasCol2 = (n: string) => cols2.some(c => c.name === n);
+  if (!hasCol2('pvw_match_mode')) {
+    db.exec(`ALTER TABLE tally_sources ADD COLUMN pvw_match_mode TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!hasCol2('pgm_match_mode')) {
+    db.exec(`ALTER TABLE tally_sources ADD COLUMN pgm_match_mode TEXT NOT NULL DEFAULT ''`);
+  }
   initialised = true;
 }
 
@@ -45,7 +59,20 @@ function db(): DatabaseSync {
   return dbRef;
 }
 
+/**
+ * Validate / coerce a raw mode value coming from DB or wire format.
+ * Anything outside the allowed set falls back to empty string (which
+ * means "derive at use site"). 'truthy' is a valid persisted value too;
+ * we just don't bother writing it (empty == truthy by default).
+ */
+function coerceMode(v: any): '' | 'truthy' | 'equals' | 'inList' {
+  if (v === 'truthy' || v === 'equals' || v === 'inList') return v;
+  return '';
+}
+
 function rowToSource(row: any): TallySource {
+  const pvwMode = coerceMode(row.pvwMatchMode);
+  const pgmMode = coerceMode(row.pgmMatchMode);
   return {
     id: row.id,
     name: row.name,
@@ -54,6 +81,8 @@ function rowToSource(row: any): TallySource {
     pgmVariable: row.pgmVariable ?? '',
     pvwMatchValue: row.pvwMatchValue ?? '',
     pgmMatchValue: row.pgmMatchValue ?? '',
+    pvwMatchMode: pvwMode || undefined,
+    pgmMatchMode: pgmMode || undefined,
     showLabel: !!row.showLabel,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
@@ -63,6 +92,7 @@ function rowToSource(row: any): TallySource {
 const COLS = `id, name, slug,
   pvw_variable AS pvwVariable, pgm_variable AS pgmVariable,
   pvw_match_value AS pvwMatchValue, pgm_match_value AS pgmMatchValue,
+  pvw_match_mode AS pvwMatchMode, pgm_match_mode AS pgmMatchMode,
   show_label AS showLabel,
   created_at AS createdAt, updated_at AS updatedAt`;
 
@@ -109,11 +139,13 @@ export function insertTallySource(s: TallySource): void {
     `INSERT INTO tally_sources
        (id, name, slug, pvw_variable, pgm_variable,
         pvw_match_value, pgm_match_value,
+        pvw_match_mode, pgm_match_mode,
         show_label, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(s.id, s.name, s.slug,
         s.pvwVariable, s.pgmVariable,
         s.pvwMatchValue ?? '', s.pgmMatchValue ?? '',
+        s.pvwMatchMode ?? '', s.pgmMatchMode ?? '',
         s.showLabel ? 1 : 0, s.createdAt, s.updatedAt);
 }
 
@@ -123,11 +155,13 @@ export function updateTallySource(s: TallySource): void {
        SET name = ?, slug = ?,
            pvw_variable = ?, pgm_variable = ?,
            pvw_match_value = ?, pgm_match_value = ?,
+           pvw_match_mode = ?, pgm_match_mode = ?,
            show_label = ?, updated_at = ?
      WHERE id = ?`
   ).run(s.name, s.slug,
         s.pvwVariable, s.pgmVariable,
         s.pvwMatchValue ?? '', s.pgmMatchValue ?? '',
+        s.pvwMatchMode ?? '', s.pgmMatchMode ?? '',
         s.showLabel ? 1 : 0, s.updatedAt, s.id);
 }
 
@@ -203,6 +237,10 @@ export function newTallySource(partial: Partial<TallySource>): TallySource {
   const slug = partial.slug
     ? uniqueSlug(partial.slug)
     : uniqueSlug(name);
+  // Validate caller-supplied modes; anything outside the enum becomes
+  // undefined (server will derive at read time).
+  const pvwMode = coerceMode(partial.pvwMatchMode) || undefined;
+  const pgmMode = coerceMode(partial.pgmMatchMode) || undefined;
   return {
     id: newId(),
     name,
@@ -211,6 +249,8 @@ export function newTallySource(partial: Partial<TallySource>): TallySource {
     pgmVariable: canonVar(partial.pgmVariable ?? ''),
     pvwMatchValue: partial.pvwMatchValue ?? '',
     pgmMatchValue: partial.pgmMatchValue ?? '',
+    pvwMatchMode: pvwMode,
+    pgmMatchMode: pgmMode,
     showLabel: partial.showLabel !== false,
     createdAt: now,
     updatedAt: now

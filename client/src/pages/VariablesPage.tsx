@@ -138,7 +138,10 @@ export function VariablesPage() {
         <AuthBar />
       </div>
 
-      <div style={{ padding: 20, maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <div style={{
+        padding: 20, maxWidth: 900, margin: '0 auto', width: '100%',
+        flex: 1, overflow: 'auto', minHeight: 0
+      }}>
         {/* Add to watch list - editor-only */}
         {canEdit && (
         <div style={{

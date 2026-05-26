@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useVariableValues } from '../lib/useVariableValues';
 import {
-  type TallySource, tallyState, tallyColor
+  type TallySource, tallyState, tallyColor, activeMatches
 } from '../lib/tally';
 import { VarAutocompleteInput, refreshVariableSuggestions } from '../lib/autocomplete';
 import { AutoPopulateWizard } from './AutoPopulateWizard';
@@ -103,7 +103,13 @@ export function TallyHubPage() {
         <AuthBar />
       </div>
 
-      <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <div style={{
+        padding: 20, maxWidth: 1100, margin: '0 auto', width: '100%',
+        // Pages have height:100vh + overflow:hidden on .page; without
+        // a flex-1 + overflow-auto wrapper around the content, long
+        // lists get clipped at the bottom of the viewport.
+        flex: 1, overflow: 'auto', minHeight: 0
+      }}>
 
         <div style={{
           background: '#141414', border: '1px solid #2a2a2a', borderRadius: 6,
@@ -201,20 +207,31 @@ function TallyTile({
   const bg = tallyColor(state);
   const stateLabel =
     state === 'pgm' ? 'PROGRAM' :
+    state === 'aux' ? 'AUX' :
     state === 'pvw' ? 'PREVIEW' :
                       'OFF';
-  const fg = state === 'off' ? '#666' : '#fff';
+  // PGM (red) and AUX (yellow) get black text for legibility against
+  // the bright background; PVW (green) and OFF (black) keep white/gray.
+  const fg = state === 'off' ? '#666' :
+             state === 'aux' ? '#0a0a0a' :
+                               '#fff';
 
-  const pvwLabel = source.pvwVariable
-    ? (source.pvwMatchValue
-        ? `${source.pvwVariable} == ${source.pvwMatchValue}`
-        : source.pvwVariable)
-    : '(none)';
-  const pgmLabel = source.pgmVariable
-    ? (source.pgmMatchValue
-        ? `${source.pgmVariable} == ${source.pgmMatchValue}`
-        : source.pgmVariable)
-    : '(none)';
+  // Currently-routed destinations relevant to the active state. See
+  // activeMatches() in lib/tally for the full rules.
+  const activeList = activeMatches(values, source, state);
+  const matchSummary = activeList.join(', ');
+
+  // Mode-aware label. `inList` shows the comma-list in {braces} to
+  // make it clear any one of the items matches; `equals` keeps the
+  // existing `==` notation; truthy / no-match shows the bare var.
+  function describeSide(v: string, mv: string | undefined, mode: string | undefined): string {
+    if (!v) return '(none)';
+    if (!mv) return v;
+    if (mode === 'inList') return `${v} ∈ {${mv}}`;
+    return `${v} == ${mv}`;
+  }
+  const pvwLabel = describeSide(source.pvwVariable, source.pvwMatchValue, source.pvwMatchMode);
+  const pgmLabel = describeSide(source.pgmVariable, source.pgmMatchValue, source.pgmMatchMode);
 
   return (
     <div style={{
@@ -237,6 +254,16 @@ function TallyTile({
         }} title={source.name}>
           {source.name}
         </div>
+        {/* Matched destinations - only shown for inList sources when
+            currently on. Bare comma-list in muted-but-readable text. */}
+        {matchSummary && (
+          <div style={{
+            fontSize: 11, opacity: 0.9, marginTop: 4,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+          }} title={`On at: ${matchSummary}`}>
+            on: {matchSummary}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: 10, fontSize: 12, color: '#aaa' }}>

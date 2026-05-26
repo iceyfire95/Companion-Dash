@@ -2,7 +2,7 @@ import type {
   Dashboard, Panel, SavedPanelTemplate, CompanionConfig, ButtonAction
 } from '../types';
 import type {
-  TallySource, AutoPopulateRequest, AutoPopulateResult
+  TallySource, AutoPopulateRequest, AutoPopulateResult, EMDestinations
 } from './tally';
 import { openLoginModal, refreshAuthStatus } from './auth';
 
@@ -158,6 +158,17 @@ export const api = {
     j<AutoPopulateResult>('/api/tally-sources/auto-populate/preview', {
       method: 'POST', body: JSON.stringify(req)
     }),
+  /**
+   * Event Master: probe a connection for destination names so the
+   * wizard can show a checklist. Hits screen_<N>_name and aux_<N>_name
+   * variables, dedupes + sorts.
+   */
+  probeEMDestinations: (
+    connection: string, screenCount = 256, auxCount = 256
+  ) => j<EMDestinations>('/api/tally-sources/auto-populate/em-destinations', {
+    method: 'POST',
+    body: JSON.stringify({ connection, screenCount, auxCount })
+  }),
   bulkCreateTallySources: (items: Array<Partial<TallySource>>) =>
     j<{ created: TallySource[] }>('/api/tally-sources/bulk', {
       method: 'POST', body: JSON.stringify({ items })

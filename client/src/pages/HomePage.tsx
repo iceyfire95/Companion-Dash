@@ -37,7 +37,10 @@ export function HomePage() {
         <Link to="/settings"><button>Settings</button></Link>
         <AuthBar />
       </div>
-      <div style={{ padding: 20, maxWidth: 800, margin: '0 auto', width: '100%' }}>
+      <div style={{
+        padding: 20, maxWidth: 800, margin: '0 auto', width: '100%',
+        flex: 1, overflow: 'auto', minHeight: 0
+      }}>
         <h2>Dashboards</h2>
         {/* Create input is editor-only - hides entirely when locked. */}
         {canEdit && (
