@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { Dashboard } from '../types';
@@ -7,6 +7,9 @@ import { AuthBar, useCanEdit } from '../components/AuthBar';
 export function HomePage() {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const canEdit = useCanEdit();
 
   async function load() {
@@ -27,6 +30,52 @@ export function HomePage() {
     load();
   }
 
+  async function doExport(d: Dashboard) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.exportDashboard(d.id, d.name);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Read a chosen .cwddash.json file and POST it to the import
+   * endpoint. The server appends "(imported)" to the name by default;
+   * we prompt to override only if the user wants to.
+   */
+  async function handleFile(file: File | null) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      let doc: any;
+      try { doc = JSON.parse(text); }
+      catch { throw new Error('not valid JSON'); }
+      if (doc?.format !== 'cwd-dashboard') {
+        throw new Error(`not a dashboard file (format: ${doc?.format ?? 'unknown'})`);
+      }
+      const incoming = String(doc?.dashboard?.name ?? 'Imported dashboard');
+      const choice = prompt(
+        'Name for the imported dashboard:',
+        `${incoming} (imported)`
+      );
+      if (choice === null) return;
+      const nameOverride = choice.trim() || undefined;
+      await api.importDashboard(doc, nameOverride);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
   return (
     <div className="page">
       <div className="toolbar">
@@ -42,7 +91,15 @@ export function HomePage() {
         flex: 1, overflow: 'auto', minHeight: 0
       }}>
         <h2>Dashboards</h2>
-        {/* Create input is editor-only - hides entirely when locked. */}
+        {error && (
+          <div style={{
+            background: '#7f1d1d', color: '#fff', padding: '8px 12px',
+            borderRadius: 4, marginBottom: 12, fontSize: 12
+          }}>
+            {error}
+          </div>
+        )}
+        {/* Create + Import are editor-only. Hidden entirely when locked. */}
         {canEdit && (
           <div className="list-row">
             <input
@@ -52,6 +109,21 @@ export function HomePage() {
               style={{ flex: 1 }}
             />
             <button className="primary" onClick={create}>Create</button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={e => handleFile(e.target.files?.[0] ?? null)}
+              disabled={busy}
+              style={{ display: 'none' }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              title="Import a dashboard from a .cwddash.json file"
+            >
+              Import...
+            </button>
           </div>
         )}
         <div style={{ marginTop: 16 }}>
@@ -70,6 +142,13 @@ export function HomePage() {
               {canEdit && (
                 <>
                   <Link to={`/edit/${d.id}`}><button className="primary">Edit</button></Link>
+                  <button
+                    onClick={() => doExport(d)}
+                    disabled={busy}
+                    title="Download as JSON (includes background image)"
+                  >
+                    Export
+                  </button>
                   <button className="danger" onClick={() => remove(d.id)}>Delete</button>
                 </>
               )}

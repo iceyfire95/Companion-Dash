@@ -168,4 +168,161 @@ r.put('/:id/background-fit', requireAuth, (req, res) => {
   res.json(db.getDashboard(req.params.id));
 });
 
+// ---- Export / Import -----------------------------------------------------
+
+const DASHBOARD_EXPORT_FORMAT = 'cwd-dashboard';
+const DASHBOARD_EXPORT_VERSION = 1;
+
+/**
+ * Export a dashboard, its panels, and (optionally) its background image
+ * as one JSON document. The background is inlined as a data URL so the
+ * file is self-contained; users can email/share without losing it.
+ *
+ * Tally sources, watched variables, and Companion connection settings
+ * are NOT exported - those are environment-specific. Imported $(conn:var)
+ * references survive textually; if the target server has a connection
+ * with the same label, they resolve normally.
+ *
+ * Returns the JSON body inline. The client wraps it in a downloadable
+ * file via Blob + URL.createObjectURL.
+ */
+r.get('/:id/export', (req, res) => {
+  const d = db.getDashboard(req.params.id);
+  if (!d) { res.status(404).json({ error: 'not found' }); return; }
+  const panels = db.listPanels(req.params.id);
+
+  // Strip stable identifiers and the dashboard pointer from each panel
+  // so a fresh import generates new ids and binds to the new dashboard.
+  // We keep templateId because it's only meaningful inside the source DB,
+  // and clear it explicitly on import.
+  const exportPanels = panels.map(p => {
+    const { id: _id, dashboardId: _did, ...rest } = p;
+    return rest;
+  });
+
+  // Background bytes inline as data URL when present.
+  let background: { mime: string; dataBase64: string } | null = null;
+  const bg = getBackground(req.params.id);
+  if (bg) {
+    background = {
+      mime: bg.mime,
+      dataBase64: Buffer.from(bg.data).toString('base64')
+    };
+  }
+
+  res.json({
+    format: DASHBOARD_EXPORT_FORMAT,
+    version: DASHBOARD_EXPORT_VERSION,
+    exportedAt: Date.now(),
+    dashboard: {
+      name: d.name,
+      width: d.width,
+      height: d.height,
+      bgColor: d.bgColor,
+      backgroundFit: d.backgroundFit ?? 'cover'
+    },
+    panels: exportPanels,
+    background
+  });
+});
+
+/**
+ * Import a previously-exported dashboard JSON document.
+ *
+ * Creates a fresh dashboard row, inserts all panels with new ids,
+ * and decodes the background image if present (allowlist + size cap
+ * still enforced, same as the regular upload route).
+ *
+ * Returns the newly-created dashboard so the client can navigate
+ * straight to its editor.
+ */
+r.post('/import', requireAuth, (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object') {
+    res.status(400).json({ error: 'body must be JSON' });
+    return;
+  }
+  if (body.format !== DASHBOARD_EXPORT_FORMAT) {
+    res.status(400).json({ error: `unsupported format: ${body.format ?? '(none)'}` });
+    return;
+  }
+  if (typeof body.version !== 'number' || body.version > DASHBOARD_EXPORT_VERSION) {
+    res.status(400).json({ error: `unsupported version: ${body.version}` });
+    return;
+  }
+  if (!body.dashboard || typeof body.dashboard !== 'object') {
+    res.status(400).json({ error: 'missing dashboard' });
+    return;
+  }
+
+  const now = Date.now();
+  const incoming = body.dashboard;
+  // Honour an optional rename via body.nameOverride. Otherwise append
+  // " (imported)" to the original name so the user can tell duplicates
+  // apart in the home list.
+  const baseName = String(body.nameOverride ?? `${incoming.name ?? 'Imported'} (imported)`).trim()
+    || 'Imported dashboard';
+
+  const fit = (incoming.backgroundFit === 'contain' || incoming.backgroundFit === 'stretch')
+    ? incoming.backgroundFit
+    : 'cover';
+
+  const dash = {
+    id: newId(),
+    name: baseName,
+    width: Number(incoming.width ?? 1920),
+    height: Number(incoming.height ?? 1080),
+    bgColor: String(incoming.bgColor ?? '#0a0a0a'),
+    backgroundFit: fit as 'cover' | 'contain' | 'stretch',
+    hasBackground: false,
+    createdAt: now,
+    updatedAt: now
+  } satisfies Dashboard;
+  db.insertDashboard(dash);
+  // Apply backgroundFit immediately so the freshly-created dashboard
+  // remembers it even if the image upload below fails.
+  setBackgroundFit(dash.id, fit as BackgroundFit);
+
+  // Insert panels. We strip any leftover stable fields (id/dashboardId)
+  // defensively in case the export shape is older than expected.
+  const panels = Array.isArray(body.panels) ? body.panels : [];
+  for (const raw of panels) {
+    if (!raw || typeof raw !== 'object') continue;
+    const { id: _i, dashboardId: _d, ...rest } = raw;
+    // Regenerate cell ids so duplicate imports don't collide.
+    const nextHeader = rest.header ? { ...rest.header, id: newId() } : null;
+    const nextCells = Array.isArray(rest.cells)
+      ? rest.cells.map((c: any) => ({ ...c, id: newId() }))
+      : [];
+    const p = {
+      ...rest,
+      id: newId(),
+      dashboardId: dash.id,
+      header: nextHeader,
+      cells: nextCells,
+      templateId: null   // bound to source DB, meaningless here
+    };
+    db.upsertPanel(p as any);
+  }
+
+  // Background, if present. Re-validate mime + size to keep the
+  // allowlist consistent with the upload endpoint.
+  if (body.background && typeof body.background === 'object') {
+    const mime = String(body.background.mime ?? '').toLowerCase().trim();
+    const b64 = String(body.background.dataBase64 ?? '');
+    if (ALLOWED_MIME_TYPES.has(mime) && b64) {
+      try {
+        const buf = Buffer.from(b64, 'base64');
+        if (buf.length > 0 && buf.length <= MAX_BACKGROUND_BYTES) {
+          upsertBackground(dash.id, mime, new Uint8Array(buf.buffer, buf.byteOffset, buf.length));
+        }
+        // Soft failure: oversize / decode-error gives a dashboard
+        // without a background rather than failing the whole import.
+      } catch { /* ignore */ }
+    }
+  }
+
+  res.status(201).json(db.getDashboard(dash.id));
+});
+
 export default r;

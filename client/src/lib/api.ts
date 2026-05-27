@@ -7,6 +7,38 @@ import type {
 import { openLoginModal, refreshAuthStatus } from './auth';
 
 /**
+ * Replace path-unsafe characters with underscore. Used when building
+ * a default download filename from a user-supplied template /
+ * dashboard name. We keep it conservative: only word characters,
+ * dash, dot, and space remain. Trailing/leading dots are stripped.
+ */
+function sanitiseFilename(s: string): string {
+  const cleaned = String(s ?? '')
+    .replace(/[^\w\-. ]+/g, '_')
+    .replace(/^\.+|\.+$/g, '')
+    .trim();
+  return cleaned || 'untitled';
+}
+
+/**
+ * Trigger a browser download of an in-memory Blob with the given
+ * filename. Returns the filename so callers can confirm. Uses a
+ * temporary <a> + URL.createObjectURL; cleans up after itself.
+ */
+function triggerDownload(blob: Blob, filename: string): string {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Defer revoking the URL so the download has time to start.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return filename;
+}
+
+/**
  * Core API fetch wrapper.
  *
  * On 401, asks the auth layer to open the login modal and waits for
@@ -104,7 +136,65 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ panelId, name })
     }),
+  /**
+   * Rename a saved-panel template. Server updates both the name
+   * column and the embedded name inside the serialised blob.
+   */
+  renameTemplate: (id: string, name: string) =>
+    j<SavedPanelTemplate>(`/api/saved-panels/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name })
+    }),
   deleteTemplate: (id: string) => j<void>(`/api/saved-panels/${id}`, { method: 'DELETE' }),
+  /**
+   * Fetch a template's export JSON and trigger a browser download.
+   * Returns the filename so the caller can confirm / toast.
+   */
+  exportTemplate: (async function(id: string, name: string): Promise<string> {
+    const r = await fetch(`/api/saved-panels/${id}/export`, {
+      credentials: 'same-origin'
+    });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const blob = await r.blob();
+    return triggerDownload(blob, `${sanitiseFilename(name)}.cwdpanel.json`);
+  }),
+  /**
+   * Import a template from a JSON document. `nameOverride` lets the
+   * UI rename on import (e.g. when a same-named template already
+   * exists).
+   */
+  importTemplate: (doc: unknown, nameOverride?: string) =>
+    j<SavedPanelTemplate>('/api/saved-panels/import', {
+      method: 'POST',
+      body: JSON.stringify(
+        nameOverride && doc && typeof doc === 'object'
+          ? { ...(doc as object), nameOverride }
+          : doc
+      )
+    }),
+
+  /**
+   * Export an entire dashboard (panels + background image inlined as
+   * base64) as a single JSON file. Same trigger-download flow as
+   * exportTemplate.
+   */
+  exportDashboard: (async function(id: string, name: string): Promise<string> {
+    const r = await fetch(`/api/dashboards/${id}/export`, {
+      credentials: 'same-origin'
+    });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const blob = await r.blob();
+    return triggerDownload(blob, `${sanitiseFilename(name)}.cwddash.json`);
+  }),
+  importDashboard: (doc: unknown, nameOverride?: string) =>
+    j<Dashboard>('/api/dashboards/import', {
+      method: 'POST',
+      body: JSON.stringify(
+        nameOverride && doc && typeof doc === 'object'
+          ? { ...(doc as object), nameOverride }
+          : doc
+      )
+    }),
 
   // Settings
   getCompanion: () => j<CompanionConfig>('/api/settings/companion'),

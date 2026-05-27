@@ -178,6 +178,22 @@ input[type="checkbox"] {
   cursor: ns-resize;
 }
 
+/* Grid-line drag handles inside an editing panel. Transparent until
+   hovered so they don't obscure cell content while still being easy
+   to find. Sit above cells (z-index) so the cursor swaps reliably. */
+.track-handle {
+  background: transparent;
+  transition: background 80ms ease;
+}
+.track-handle:hover {
+  background: #2563eb;
+  opacity: 0.6;
+}
+.track-handle:active {
+  background: #2563eb;
+  opacity: 0.9;
+}
+
 .inspector {
   width: 340px;
   background: #0f0f0f;

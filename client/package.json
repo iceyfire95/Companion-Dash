@@ -1,6 +1,6 @@
 {
   "name": "companion-web-dashboard-client",
-  "version": "0.9.4-alpha",
+  "version": "0.9.5-alpha",
   "private": true,
   "type": "module",
   "scripts": {

@@ -88,6 +88,10 @@ export interface Panel {
   rows: number;
   cols: number;
   cells: Cell[];
+  /** Per-row track sizes (fractions). Absent / wrong length = uniform 1fr. */
+  rowSizes?: number[];
+  /** Per-column track sizes (fractions). Absent / wrong length = uniform 1fr. */
+  colSizes?: number[];
   bgColor: string;
   borderColor: string;
   borderWidth: number;

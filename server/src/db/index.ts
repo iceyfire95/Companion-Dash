@@ -168,6 +168,22 @@ export function insertSavedPanel(t: SavedPanelTemplate): void {
   ).run(t.id, t.name, JSON.stringify(t), t.createdAt);
 }
 
+/**
+ * Rename a saved-panel template. Updates both the `name` column AND the
+ * cached name inside the serialised `data` blob - listSavedPanels reads
+ * from `data`, so a single-column update would silently appear to not
+ * take effect.
+ */
+export function updateSavedPanelName(id: string, name: string): SavedPanelTemplate | undefined {
+  const existing = getSavedPanel(id);
+  if (!existing) return undefined;
+  const next: SavedPanelTemplate = { ...existing, name };
+  db.prepare(
+    `UPDATE saved_panels SET name = ?, data = ? WHERE id = ?`
+  ).run(name, JSON.stringify(next), id);
+  return next;
+}
+
 export function deleteSavedPanel(id: string): void {
   db.prepare(`DELETE FROM saved_panels WHERE id = ?`).run(id);
 }

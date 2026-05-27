@@ -111,6 +111,14 @@ export interface Panel {
   rows: number;
   cols: number;
   cells: Cell[];              // body cells, grid layout
+  /**
+   * Per-row size fractions. If absent or length !== rows, viewer/editor
+   * fall back to uniform 1fr per row. Each value is unitless and clamped
+   * to a minimum of 0.1 by the editor. Always serialised when present.
+   */
+  rowSizes?: number[];
+  /** Per-column size fractions. Same shape rules as rowSizes. */
+  colSizes?: number[];
   // Panel-wide styling
   bgColor: string;
   borderColor: string;

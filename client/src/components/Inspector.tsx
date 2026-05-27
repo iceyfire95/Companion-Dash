@@ -108,7 +108,11 @@ export function Inspector({
         }
       }
     }
-    onPanelChange({ ...panel, rows, cells });
+    // Drop rowSizes when the count changes - PanelView falls back to uniform.
+    // User can re-drag if they want non-uniform tracks. Cheaper UX than
+    // trying to interpolate/pad-with-1s which has no obviously-right answer.
+    const { rowSizes: _drop, ...rest } = panel;
+    onPanelChange({ ...rest, rows, cells } as Panel);
   };
   const setCols = (n: number) => {
     const cols = Math.max(1, Math.min(20, n));
@@ -120,7 +124,14 @@ export function Inspector({
         }
       }
     }
-    onPanelChange({ ...panel, cols, cells });
+    const { colSizes: _drop, ...rest } = panel;
+    onPanelChange({ ...rest, cols, cells } as Panel);
+  };
+
+  /** Clear both rowSizes and colSizes so every track returns to 1fr. */
+  const resetTrackSizes = () => {
+    const { rowSizes: _r, colSizes: _c, ...rest } = panel;
+    onPanelChange(rest as Panel);
   };
 
   return (
@@ -218,6 +229,20 @@ export function Inspector({
           <input type="number" min={1} max={20}
                  value={panel.cols}
                  onChange={e => setCols(Number(e.target.value))} />
+        </div>
+        <div className="row">
+          <label>Track sizes</label>
+          <button
+            onClick={resetTrackSizes}
+            disabled={!panel.rowSizes && !panel.colSizes}
+            title="Reset all row/column tracks to equal sizes"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+          >
+            Reset
+          </button>
+          <span style={{ fontSize: 11, color: '#777' }}>
+            Drag between cells to resize
+          </span>
         </div>
         <div className="row">
           <label>Edit cell</label>

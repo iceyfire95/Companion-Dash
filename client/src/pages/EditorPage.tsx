@@ -8,6 +8,7 @@ import { PanelView } from '../components/PanelView';
 import { Inspector } from '../components/Inspector';
 import { DashboardBackground } from '../lib/DashboardBackground';
 import { AuthBar } from '../components/AuthBar';
+import { TemplatesManager } from '../components/TemplatesManager';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -18,6 +19,7 @@ export function EditorPage() {
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<SavedPanelTemplate[]>([]);
+  const [templatesManagerOpen, setTemplatesManagerOpen] = useState(false);
   const values = useVariableValues();
 
   // Load
@@ -81,8 +83,64 @@ export function EditorPage() {
     origX: number; origY: number; origW: number; origH: number;
   }>(null);
 
+  /**
+   * Active track-resize state. Captures the panel id, axis, track index,
+   * starting mouse position, the cached body inner size at mousedown
+   * (so we can convert px movement to fraction movement reliably), and
+   * the size snapshot at mousedown so each mousemove computes against
+   * a fixed reference instead of accumulating rounding drift.
+   */
+  const trackDragRef = useRef<null | {
+    panelId: string;
+    axis: 'row' | 'col';
+    trackIndex: number;
+    startMouse: number;       // clientX (col) or clientY (row)
+    bodyExtent: number;       // body inner width (col) or inner height (row), in px
+    origSizes: number[];      // snapshot at mousedown
+  }>(null);
+
   useEffect(() => {
     function onMove(e: MouseEvent) {
+      // ---- Track resize (rows/cols inside a panel) ------------------
+      const tdrag = trackDragRef.current;
+      if (tdrag) {
+        const delta = (tdrag.axis === 'col' ? e.clientX : e.clientY) - tdrag.startMouse;
+        if (tdrag.bodyExtent <= 0) return;
+        // Convert pixel delta to fraction delta. Total fractions stay
+        // constant - we only redistribute between two adjacent tracks.
+        const total = tdrag.origSizes.reduce((a, b) => a + b, 0) || 1;
+        const fracDelta = (delta / tdrag.bodyExtent) * total;
+        const i = tdrag.trackIndex;
+        // Adjust track[i] and track[i+1] in equal-and-opposite fashion.
+        // Positive mouse delta = handle moved DOWN (row drag) or RIGHT (col
+        // drag), so track[i] (above/left of handle) grows and track[i+1]
+        // (below/right) shrinks. Each is clamped to a minimum of 0.1 so a
+        // track can't disappear entirely.
+        const a0 = tdrag.origSizes[i];
+        const b0 = tdrag.origSizes[i + 1];
+        const minFrac = 0.1;
+        // d positive: a grows by d, b shrinks by d. So:
+        //   d <= b0 - minFrac (can't shrink b below minFrac)
+        //   d >= -(a0 - minFrac) (can't shrink a below minFrac)
+        const maxDelta = b0 - minFrac;
+        const minDelta = -(a0 - minFrac);
+        const d = Math.max(minDelta, Math.min(maxDelta, fracDelta));
+        const next = tdrag.origSizes.slice();
+        next[i] = a0 + d;
+        next[i + 1] = b0 - d;
+        setPanels(prev => prev.map(p => {
+          if (p.id !== tdrag.panelId) return p;
+          const patch = tdrag.axis === 'row'
+            ? { rowSizes: next }
+            : { colSizes: next };
+          const updated = { ...p, ...patch };
+          queueSave(updated);
+          return updated;
+        }));
+        return;
+      }
+
+      // ---- Panel move/resize (existing) -----------------------------
       const drag = dragRef.current;
       if (!drag) return;
       const dx = e.clientX - drag.startX;
@@ -107,7 +165,10 @@ export function EditorPage() {
         return next;
       }));
     }
-    function onUp() { dragRef.current = null; }
+    function onUp() {
+      dragRef.current = null;
+      trackDragRef.current = null;
+    }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => {
@@ -123,6 +184,38 @@ export function EditorPage() {
       id: p.id, mode,
       startX: e.clientX, startY: e.clientY,
       origX: p.x, origY: p.y, origW: p.width, origH: p.height
+    };
+    setSelectedPanelId(p.id);
+  }
+
+  /**
+   * Mousedown handler for a row/column gutter handle. We need the
+   * panel-body's inner rect (the element that owns the grid template)
+   * to translate pixel drag into fraction movement. We walk up from
+   * the event target to find `.panel-body`.
+   */
+  function startTrackDrag(
+    e: React.MouseEvent, p: Panel, axis: 'row' | 'col', trackIndex: number
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handleEl = e.currentTarget as HTMLElement;
+    const bodyEl = handleEl.parentElement; // the .panel-body
+    if (!bodyEl) return;
+    const rect = bodyEl.getBoundingClientRect();
+    // Effective sizes: use saved sizes if length matches, else uniform.
+    const count = axis === 'row' ? p.rows : p.cols;
+    const saved = axis === 'row' ? p.rowSizes : p.colSizes;
+    const origSizes = (saved && saved.length === count)
+      ? saved.map(s => Math.max(0.1, Number.isFinite(s) ? s : 1))
+      : Array(count).fill(1);
+    trackDragRef.current = {
+      panelId: p.id,
+      axis,
+      trackIndex,
+      startMouse: axis === 'col' ? e.clientX : e.clientY,
+      bodyExtent: axis === 'col' ? rect.width : rect.height,
+      origSizes
     };
     setSelectedPanelId(p.id);
   }
@@ -169,6 +262,12 @@ export function EditorPage() {
           <option value="">+ From template...</option>
           {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+        <button
+          onClick={() => setTemplatesManagerOpen(true)}
+          title="Manage panel templates - rename, delete, import, export"
+        >
+          Manage templates
+        </button>
         <div className="spacer" />
         <label style={{ fontSize: 12, color: '#aaa' }}>Canvas</label>
         <input type="number" value={dashboard.width}
@@ -210,6 +309,7 @@ export function EditorPage() {
                 }
                 onMouseDownPanel={e => onPanelMouseDown(e, p)}
                 onMouseDownResize={(e, kind) => startDrag(e, p, kind)}
+                onMouseDownTrack={(e, axis, idx) => startTrackDrag(e, p, axis, idx)}
               />
             ))}
           </div>
@@ -241,6 +341,11 @@ export function EditorPage() {
           />
         )}
       </div>
+      <TemplatesManager
+        open={templatesManagerOpen}
+        onClose={() => setTemplatesManagerOpen(false)}
+        onChange={setTemplates}
+      />
     </div>
   );
 }
